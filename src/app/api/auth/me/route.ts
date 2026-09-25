@@ -11,6 +11,7 @@ export async function GET() {
   return NextResponse.json({
     loggedIn: true,
     needsRole: profile.role === null,
+    needsDetails: profile.status === "incomplete",
     needsApproval: profile.status !== "approved",
     profile,
   });

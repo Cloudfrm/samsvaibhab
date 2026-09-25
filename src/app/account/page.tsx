@@ -3,6 +3,10 @@ import { getCurrentProfile } from "@/lib/auth";
 import { LogoutButton } from "@/components/LogoutButton";
 
 const STATUS_COPY = {
+  incomplete: {
+    title: "Your details are not finished",
+    body: "Please fill in your account details and send them for approval.",
+  },
   pending: {
     title: "Your account is waiting for approval",
     body: "Our team is checking your details. We will be in touch shortly. You cannot trade until your account is approved.",

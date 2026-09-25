@@ -1,6 +1,36 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { isAdmin } from "@/lib/auth";
+import { createAdminClient } from "@/utils/supabase/admin";
+import { isAdmin, type Profile } from "@/lib/auth";
+import { loadAccount, withSignedUrls } from "@/lib/profile";
+
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  if (!(await isAdmin())) {
+    return NextResponse.json({ error: "Admins only" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!profile) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  const account = await loadAccount(profile as Profile);
+
+  return NextResponse.json({
+    ...account,
+    documents: await withSignedUrls(account.documents),
+  });
+}
 
 export async function PATCH(
   request: NextRequest,
