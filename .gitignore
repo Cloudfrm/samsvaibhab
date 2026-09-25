@@ -40,3 +40,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# real ID documents used for testing
+/samples
+
+# stray ID documents and screenshots dropped in the project root
+/citizenship.pdf
+/Screenshot*.png
