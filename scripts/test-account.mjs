@@ -75,6 +75,19 @@ async function signIn(email, password) {
     return { status: res.status, body };
   };
 
+  // Follows nothing, so we can see the redirect itself.
+  const page = async (path) => {
+    const res = await fetch(`${BASE}${path}`, {
+      headers: { cookie },
+      redirect: "manual",
+    });
+    return {
+      status: res.status,
+      to: res.headers.get("location"),
+      html: res.status < 300 ? await res.text() : "",
+    };
+  };
+
   const json = (path, method, payload) =>
     call(path, {
       method,
@@ -89,7 +102,7 @@ async function signIn(email, password) {
     return call("/api/profile/documents", { method: "POST", body: form });
   };
 
-  return { call, json, upload };
+  return { call, json, upload, page };
 }
 
 const PNG = Buffer.from(
@@ -541,6 +554,78 @@ async function main() {
 
     const after = await buyer.api.call("/api/profile");
     expectHas(after.body.missing.documents, doc.doc_type, "missing again");
+  });
+
+  // -------------------------------------------------------------------------
+  const fresh = await makeUser("pages", "supplier");
+  console.log("\nPages");
+
+  const goesTo = (res, where, what) => {
+    if (res.status !== 307 && res.status !== 302) {
+      throw new Error(`${what}: got ${res.status}, wanted a redirect`);
+    }
+    if (!res.to?.endsWith(where)) {
+      throw new Error(`${what}: sent to ${res.to}, wanted ${where}`);
+    }
+  };
+
+  await check("unfinished details: every page sends you to the form", async () => {
+    goesTo(await fresh.api.page("/"), "/onboarding", "home");
+    goesTo(await fresh.api.page("/account"), "/onboarding", "account");
+    goesTo(await fresh.api.page("/join/supplier"), "/onboarding", "join");
+  });
+
+  await check("the form page opens on step 1", async () => {
+    const { status, html } = await fresh.api.page("/onboarding");
+    expect(status, 200, "status");
+    for (const text of ["Who are you?", "Step 1 of", "A person", "A company"]) {
+      if (!html.includes(text)) throw new Error(`"${text}" is not on the page`);
+    }
+  });
+
+  await check("the form shows the help email", async () => {
+    const { html } = await fresh.api.page("/onboarding");
+    if (!html.includes("tech@cloudfrm.ai")) {
+      throw new Error("the help email is missing");
+    }
+  });
+
+  await check("waiting for approval: account page opens with Edit details", async () => {
+    const { status, html } = await company.api.page("/account");
+    expect(status, 200, "status");
+    if (!html.includes("waiting for approval")) {
+      throw new Error("the waiting message is missing");
+    }
+    if (!html.includes("Edit details")) {
+      throw new Error("the Edit details button is missing");
+    }
+    if (!html.includes("Chitwan Fresh Produce")) {
+      throw new Error("the saved company name is not shown");
+    }
+  });
+
+  await check("waiting for approval: the form can be reopened", async () => {
+    const { status, html } = await company.api.page("/onboarding");
+    expect(status, 200, "status");
+    if (!html.includes("Chitwan Fresh Produce")) {
+      throw new Error("the form did not load the saved details");
+    }
+  });
+
+  await check("not logged in: home shows the sign-up choice", async () => {
+    const res = await fetch(`${BASE}/`, { redirect: "manual" });
+    expect(res.status, 200, "status");
+    const html = await res.text();
+    if (!html.includes("Tell us who you are")) {
+      throw new Error("the home page is wrong");
+    }
+  });
+
+  await check("not logged in: the form sends you home", async () => {
+    const res = await fetch(`${BASE}/onboarding`, { redirect: "manual" });
+    if (res.status !== 307 && res.status !== 302) {
+      throw new Error(`got ${res.status}, wanted a redirect`);
+    }
   });
 
   // -------------------------------------------------------------------------

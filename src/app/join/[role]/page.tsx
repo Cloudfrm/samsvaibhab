@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/utils/supabase/server";
 import { Markdown } from "@/components/Markdown";
 import { JoinForm } from "@/components/JoinForm";
@@ -25,6 +26,10 @@ export default async function JoinPage({
   const { role } = await params;
 
   if (role !== "supplier" && role !== "buyer") notFound();
+
+  // Already signed up: finish the details instead of signing up again.
+  const profile = await getCurrentProfile();
+  if (profile) redirect(profile.status === "incomplete" ? "/onboarding" : "/account");
 
   const copy = COPY[role];
   const supabase = await createClient();

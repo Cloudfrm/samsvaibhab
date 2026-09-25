@@ -1,7 +1,14 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
+import { getCurrentProfile } from "@/lib/auth";
 
-export default function Home() {
+export default async function Home() {
+  const profile = await getCurrentProfile();
+
+  // Someone already logged in has nothing to choose here.
+  if (profile) redirect(profile.status === "incomplete" ? "/onboarding" : "/account");
+
   return (
     <>
       <header className="px-8 py-7">

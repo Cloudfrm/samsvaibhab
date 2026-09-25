@@ -1,12 +1,10 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
+import { loadAccount } from "@/lib/profile";
 import { LogoutButton } from "@/components/LogoutButton";
 
 const STATUS_COPY = {
-  incomplete: {
-    title: "Your details are not finished",
-    body: "Please fill in your account details and send them for approval.",
-  },
   pending: {
     title: "Your account is waiting for approval",
     body: "Our team is checking your details. We will be in touch shortly. You cannot trade until your account is approved.",
@@ -17,7 +15,7 @@ const STATUS_COPY = {
   },
   rejected: {
     title: "Your account was not approved",
-    body: "Please contact us if you think this is a mistake.",
+    body: "Please check your details and send them again, or contact us if you think this is a mistake.",
   },
 } as const;
 
@@ -40,6 +38,10 @@ export default async function AccountPage() {
     );
   }
 
+  // Details are not finished, so there is nothing to show yet.
+  if (profile.status === "incomplete") redirect("/onboarding");
+
+  const { bank, documents } = await loadAccount(profile);
   const status = STATUS_COPY[profile.status];
 
   return (
@@ -50,7 +52,7 @@ export default async function AccountPage() {
             {profile.role ?? "account"}
           </p>
           <h1 className="mt-2 text-[24px] font-medium tracking-[-0.02em]">
-            {profile.full_name ?? profile.email}
+            {profile.full_name ?? profile.company_name ?? profile.email}
           </h1>
         </div>
         <LogoutButton />
@@ -61,15 +63,39 @@ export default async function AccountPage() {
         <p className="mt-2 text-[14px] leading-[1.6] text-ink-mute">
           {status.body}
         </p>
+        <Link
+          href="/onboarding"
+          className="mt-4 inline-block rounded-sm border border-hairline bg-canvas px-4 py-2.5 text-[14px] font-medium transition hover:border-ink"
+        >
+          Edit details
+        </Link>
       </div>
 
       <dl className="mt-8 divide-y divide-hairline-cool border-y border-hairline-cool text-[14px]">
         <Row label="Email" value={profile.email} />
-        <Row label="Account type" value={profile.account_type ?? "Not set"} />
-        <Row label="Company" value={profile.company_name ?? "Not set"} />
-        <Row label="Phone" value={profile.phone ?? "Not set"} />
-        <Row label="Country" value={profile.country ?? "Not set"} />
-        <Row label="District" value={profile.district ?? "Not set"} />
+        <Row label="Account type" value={profile.account_type} />
+        {profile.account_type === "company" ? (
+          <>
+            <Row label="Company" value={profile.company_name} />
+            <Row label="PAN / VAT" value={profile.pan_vat} />
+            <Row label="Registration no." value={profile.registration_number} />
+          </>
+        ) : (
+          <Row label="ID number" value={profile.id_number} />
+        )}
+        <Row label="Phone" value={profile.phone} />
+        <Row label="Country" value={profile.country} />
+        <Row
+          label={profile.role === "supplier" ? "District" : "City"}
+          value={profile.role === "supplier" ? profile.district : profile.city}
+        />
+        {profile.role === "supplier" && (
+          <>
+            <Row label="Bank" value={bank?.bank_name ?? null} />
+            <Row label="Account number" value={bank?.account_number ?? null} />
+          </>
+        )}
+        <Row label="Documents" value={`${documents.length} uploaded`} />
       </dl>
     </main>
   );
@@ -79,7 +105,7 @@ function Row({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="flex justify-between gap-6 py-3">
       <dt className="text-ink-mute">{label}</dt>
-      <dd className="text-right">{value}</dd>
+      <dd className="text-right">{value ?? "Not set"}</dd>
     </div>
   );
 }
