@@ -591,6 +591,36 @@ async function main() {
     }
   });
 
+  // The picture itself is drawn in the browser on step 4, which this cannot
+  // reach. What it does check is that the page hands the form everything the
+  // picture needs: a signed link and the file type.
+  await check("the form is given a signed link for each uploaded file", async () => {
+    await fresh.api.json("/api/profile", "PATCH", { account_type: "individual" });
+    await fresh.api.upload("id_front", PNG, "front.png", "image/png");
+    await fresh.api.upload("id_back", PDF, "back.pdf", "application/pdf");
+
+    const { html } = await fresh.api.page("/onboarding");
+    for (const text of ["front.png", "back.pdf", "image/png", "application/pdf"]) {
+      if (!html.includes(text)) throw new Error(`"${text}" was not passed`);
+    }
+    if (!html.includes("verification-docs") || !html.includes("token=")) {
+      throw new Error("no signed link was passed to the form");
+    }
+  });
+
+  await check("those links really open the files", async () => {
+    const { body } = await fresh.api.call("/api/profile/documents");
+    for (const doc of body.documents) {
+      const res = await fetch(doc.url);
+      if (!res.ok) throw new Error(`${doc.file_name} did not open`);
+      expect(
+        res.headers.get("content-type")?.split(";")[0],
+        doc.mime_type,
+        `${doc.file_name} type`,
+      );
+    }
+  });
+
   await check("the form shows the help email", async () => {
     const { html } = await fresh.api.page("/onboarding");
     if (!html.includes("tech@cloudfrm.ai")) {

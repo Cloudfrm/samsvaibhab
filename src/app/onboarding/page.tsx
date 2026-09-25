@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { DOC_LABELS, REQUIRED_DOCS, loadAccount } from "@/lib/profile";
+import {
+  DOC_LABELS,
+  REQUIRED_DOCS,
+  loadAccount,
+  withSignedUrls,
+} from "@/lib/profile";
 import { AccountForm } from "@/components/AccountForm";
 import { LogoutButton } from "@/components/LogoutButton";
 
@@ -29,7 +34,7 @@ export default async function OnboardingPage() {
       <AccountForm
         profile={account.profile}
         bank={account.bank}
-        documents={account.documents}
+        documents={await withSignedUrls(account.documents)}
         countries={countries ?? []}
         districts={districts ?? []}
         requiredDocs={REQUIRED_DOCS}

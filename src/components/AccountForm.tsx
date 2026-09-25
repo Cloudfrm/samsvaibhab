@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Profile } from "@/lib/auth";
 
 type Country = { code: string; name: string };
@@ -12,7 +12,13 @@ type Bank = {
   account_name: string | null;
   account_number: string | null;
 };
-type Doc = { id: string; doc_type: string; file_name: string | null };
+type Doc = {
+  id: string;
+  doc_type: string;
+  file_name: string | null;
+  mime_type: string | null;
+  url: string | null;
+};
 
 type Props = {
   profile: Profile;
@@ -422,7 +428,7 @@ export function AccountForm({
               <Upload
                 key={docType}
                 label={docLabels[docType]}
-                fileName={docs.find((d) => d.doc_type === docType)?.file_name ?? null}
+                doc={docs.find((d) => d.doc_type === docType) ?? null}
                 error={errors[docType]}
                 busy={busy}
                 onPick={(file) => upload(docType, file)}
@@ -628,13 +634,13 @@ function Choice({
 
 function Upload({
   label,
-  fileName,
+  doc,
   error,
   busy,
   onPick,
 }: {
   label: string;
-  fileName: string | null;
+  doc: Doc | null;
   error?: string;
   busy: boolean;
   onPick: (file: File) => void;
@@ -643,30 +649,102 @@ function Upload({
     <div className="rounded-md border border-hairline p-4">
       <div className="flex items-center justify-between gap-3">
         <span className="text-[14px] font-medium">{label}</span>
-        {fileName && <span className="text-[12px] text-primary-deep">Added</span>}
+        {doc && <span className="text-[12px] text-primary-deep">Added</span>}
       </div>
 
-      {fileName && (
-        <p className="mt-1 truncate text-[12px] text-ink-mute">{fileName}</p>
-      )}
+      <div className="mt-3 flex items-start gap-3">
+        {doc && <Thumb url={doc.url} mime={doc.mime_type} />}
 
-      <label className="mt-3 inline-block cursor-pointer rounded-sm border border-hairline px-3 py-2 text-[13px] font-medium hover:border-ink">
-        {fileName ? "Replace" : "Choose file"}
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp,application/pdf"
-          disabled={busy}
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onPick(file);
-            e.target.value = "";
-          }}
-        />
-      </label>
+        <div className="min-w-0 flex-1">
+          {doc?.file_name && (
+            <p className="truncate text-[12px] text-ink-mute">{doc.file_name}</p>
+          )}
+
+          <label className="mt-2 inline-block cursor-pointer rounded-sm border border-hairline px-3 py-2 text-[13px] font-medium hover:border-ink">
+            {doc ? "Replace" : "Choose file"}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              disabled={busy}
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onPick(file);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+      </div>
 
       <Error text={error} />
     </div>
+  );
+}
+
+const THUMB = "h-[64px] w-[64px] shrink-0 rounded-sm border border-hairline-cool";
+
+/** A small picture of the file. For a PDF we draw its first page. */
+function Thumb({ url, mime }: { url: string | null; mime: string | null }) {
+  const isPdf = mime === "application/pdf";
+  const [page, setPage] = useState<string | null>(null);
+  const [broken, setBroken] = useState(false);
+
+  useEffect(() => {
+    if (!url || !isPdf) return;
+    let stop = false;
+
+    (async () => {
+      const pdfjs = await import("pdfjs-dist");
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+        "pdfjs-dist/build/pdf.worker.min.mjs",
+        import.meta.url,
+      ).toString();
+
+      const file = await pdfjs.getDocument({ url }).promise;
+      const first = await file.getPage(1);
+      const size = first.getViewport({ scale: 1 });
+      const viewport = first.getViewport({ scale: 128 / size.width });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      await first.render({ canvas, viewport }).promise;
+      if (!stop) setPage(canvas.toDataURL());
+    })().catch(() => {
+      if (!stop) setBroken(true);
+    });
+
+    return () => {
+      stop = true;
+    };
+  }, [url, isPdf]);
+
+  if (!url || broken) {
+    return (
+      <span
+        className={`${THUMB} flex items-center justify-center bg-canvas-soft text-[10px] text-ink-faint`}
+      >
+        {isPdf ? "PDF" : "File"}
+      </span>
+    );
+  }
+
+  if (isPdf && !page) {
+    return <span className={`${THUMB} animate-pulse bg-canvas-soft`} />;
+  }
+
+  // A plain img on purpose: these are short-lived signed links and drawn
+  // canvases, which next/image cannot optimise anyway.
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={isPdf ? page! : url}
+      alt=""
+      onError={() => setBroken(true)}
+      className={`${THUMB} bg-canvas-soft object-cover`}
+    />
   );
 }
 
