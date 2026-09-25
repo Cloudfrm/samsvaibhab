@@ -712,7 +712,10 @@ function Thumb({ url, mime }: { url: string | null; mime: string | null }) {
 
       await first.render({ canvas, viewport }).promise;
       if (!stop) setPage(canvas.toDataURL());
-    })().catch(() => {
+    })().catch((reason) => {
+      // Real world PDFs fail in ways a test file never does. Say why, loudly,
+      // so it can be fixed instead of guessed at.
+      console.error("Could not draw a preview of this PDF:", reason);
       if (!stop) setBroken(true);
     });
 
@@ -721,13 +724,23 @@ function Thumb({ url, mime }: { url: string | null; mime: string | null }) {
     };
   }, [url, isPdf]);
 
+  // No preview. Let them open the file instead, so they can still check it.
   if (!url || broken) {
-    return (
+    const box = (
       <span
-        className={`${THUMB} flex items-center justify-center bg-canvas-soft text-[10px] text-ink-faint`}
+        className={`${THUMB} flex flex-col items-center justify-center gap-0.5 bg-canvas-soft text-[10px] text-ink-faint`}
       >
-        {isPdf ? "PDF" : "File"}
+        <span className="font-medium">{isPdf ? "PDF" : "File"}</span>
+        {url && <span className="underline">Open</span>}
       </span>
+    );
+
+    return url ? (
+      <a href={url} target="_blank" rel="noreferrer" className="shrink-0">
+        {box}
+      </a>
+    ) : (
+      box
     );
   }
 
