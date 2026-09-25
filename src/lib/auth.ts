@@ -4,14 +4,18 @@ export type Profile = {
   id: string;
   role: "supplier" | "buyer" | "admin" | null;
   account_type: "individual" | "company" | null;
-  status: "pending" | "approved" | "rejected";
+  status: "incomplete" | "pending" | "approved" | "rejected";
   email: string | null;
   full_name: string | null;
   company_name: string | null;
   registration_number: string | null;
+  pan_vat: string | null;
+  id_number: string | null;
   phone: string | null;
   country: string | null;
   district: string | null;
+  city: string | null;
+  submitted_at: string | null;
   details: Record<string, unknown>;
 };
 
