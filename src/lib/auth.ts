@@ -11,6 +11,8 @@ export type Profile = {
   registration_number: string | null;
   pan_vat: string | null;
   id_number: string | null;
+  id_doc_type: "citizenship" | "nid_card" | "nid_paper" | null;
+  id_read_at: string | null;
   phone: string | null;
   country: string | null;
   district: string | null;

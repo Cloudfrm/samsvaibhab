@@ -6,12 +6,14 @@ A place to keep ideas in clean form.
 
 ## Idea 1 — Upload any ID document, then let AI read it and fill the form
 
-Status: **plan agreed. Waiting on sample documents, then waiting on "go".**
+Status: **backend built and tested. Waiting on a workspace-scoped Claude API
+key (or the workspace ID) to finish testing the reading step. Frontend waiting
+on Stitch designs.**
 
 ### The problem today
-Step 4 of 4 asks for "Citizenship or passport (front)" and "(back)". It is
-fixed to two document types, and we only save the file. None of the details
-written on the document are saved, and the user types everything by hand.
+Step 4 of 4 asked for "Citizenship or passport (front)" and "(back)". It was
+fixed to two document types, and we only saved the file. None of the details
+written on the document were saved, and the user typed everything by hand.
 
 ### The idea
 Let the supplier pick which document they have, upload it, and let AI read
@@ -19,27 +21,29 @@ the details off it and fill the form for them.
 
 ---
 
-## The plan
+## The plan as agreed
 
 ### Step 4 — Pick your document
 
-A dropdown. Three choices:
+Individuals only. Company accounts are unchanged.
 
-| Document | Files needed |
-|---|---|
-| Citizenship | Front and back (2) |
-| National identity card | Front and back (2) |
-| Passport | 1 |
+| They pick | Then we ask | Photos |
+|---|---|---|
+| Citizenship | — | front and back |
+| National ID | "Card or paper document?" → Card | front and back |
+| National ID | "Card or paper document?" → Paper | 1 |
 
-The user tells us the type. The AI does not guess it.
+Passport is dropped for now. Photos only — JPG, PNG, WEBP. No PDF, because
+the AI has to look at a picture.
 
-Uploading a document is **required**. A supplier cannot finish onboarding
-without it.
+The user tells us the type. The AI does not guess it. Uploading is required.
+Changing the choice throws away the old photos and details, because they
+belong to a different document.
 
-### Step 5 — Check your details (new step)
+### Step 5 — Check your details
 
 1. User clicks Next.
-2. Screen says "Reading your document..." (5 to 15 seconds).
+2. Screen says "Extracting details..." (5 to 15 seconds).
 3. Claude reads the images and pulls out the fields for that document type.
 4. The form appears, already filled in.
 5. User checks it, fixes anything wrong, clicks Next.
@@ -49,70 +53,66 @@ without it.
 account, we show a warning. They can fix either one or carry on. Nothing is
 blocked.
 
-**If the AI cannot read it:** ask for a clearer photo. If the second try
-also fails, show the empty form and let them type it in by hand. Never
-block them for good.
+**If the AI cannot read it:** one try only. Show the empty form and let them
+type it in by hand. Uploading a clearer photo counts as a new document and
+may be read again. Never block them for good.
 
-**What we save:** only the final, confirmed answer. We do not keep a
-separate record of what the AI first read.
+**What we save:** only the final, confirmed answer. We do not keep a separate
+record of what the AI first read. The details live in their own table and do
+not touch the account form.
+
+**Submitting for review** is blocked until the details are saved.
 
 ### The AI
 
 - Claude, model **Sonnet 5**.
 - Cost: about **$0.014 per document** — roughly $14 per 1,000 suppliers.
-- Needs a Claude API key. A Claude.ai subscription does **not** cover this.
+- Needs a Claude API key, **scoped to a workspace**. An org-wide key is
+  refused unless `ANTHROPIC_WORKSPACE_ID` is also set in `.env.local`.
 
 ---
 
-## Fields to save
+## Two rules that run through everything
 
-Draft list. To be confirmed against the sample documents.
+**Both scripts.** Names and places are saved twice: `_np` for the Nepali as
+printed, `_en` for the English as printed. Nothing is translated, only
+copied. A blank means it was not on the paper.
+
+**Both calendars.** Dates are saved twice: `_bs` for Bikram Sambat, `_ad` for
+the western date. Both samples print both. When only one is printed the AI
+works the other out and marks it `converted`, so the review screen can ask
+the supplier to check it.
+
+---
+
+## Fields we save
+
+Confirmed against the samples in `samples/` (git-ignored — real documents).
 
 ### Citizenship
-- Citizenship certificate number
-- Issue district
-- Issue date
-- Citizenship type (by descent / by birth / naturalised)
-- Full name
-- Gender
-- Date of birth
-- Birthplace
-- Permanent address (district, municipality or VDC, ward)
-- Father's name
-- Mother's name
-- Spouse's name
+Certificate number, full name (both scripts), gender, date of birth (both
+calendars), birth place (district, municipality, ward — both scripts),
+permanent address (same), father's name, mother's name, spouse's name (both
+scripts), citizenship type, issuing office, issue date (both calendars).
 
-### Passport
-- Passport number
-- Surname
-- Given name
-- Nationality
-- Date of birth
-- Sex
-- Place of birth
-- Date of issue
-- Date of expiry
-- Issuing authority
-- National ID number (if printed)
+### National identity card, and the paper document
+ID number, surname, given name (both scripts), nationality, gender, date of
+birth (both calendars), father's name, mother's name, spouse's name (both
+scripts), permanent address, issuing office, issue date (both calendars).
 
-### National identity card
-- National ID number
-- Full name
-- Date of birth
-- Gender
-- Father's name
-- Mother's name
-- Spouse's name
-- Permanent address (district, municipality, ward)
-- Issue date
+We do not save the machine-readable lines on the back of the card.
+
+We have no sample of the NID paper document yet, so it looks for the same
+fields as the card. If a real one turns up, check the list again.
 
 ---
 
 ## Out of scope for now
 
 Company documents. Registration certificate and PAN or VAT certificate stay
-exactly as they are today — plain file upload, nothing read from them. We
-do that later.
+exactly as they are today — plain file upload, nothing read from them.
+
+Passport. Dropped for now, can be added later the same way.
 
 ---
 
@@ -120,21 +120,11 @@ do that later.
 
 **Backend first, tested, then frontend.**
 
-1. Backend: change document types from `id_front` / `id_back` to the three
-   real types, with the right number of files each.
-2. Backend: new table to hold the details read off the document.
-3. Backend: the reading endpoint — send images to Claude, get fields back.
-4. Test all of the above.
+1. ~~Backend: the three real document types, with the right number of files.~~
+2. ~~Backend: new table to hold the details read off the document.~~
+3. ~~Backend: the reading endpoint — send images to Claude, get fields back.~~
+4. Test all of the above — the free tests pass; the reading test is blocked
+   on the API key.
 5. Frontend: step 4 dropdown and uploads.
-6. Frontend: step 5 review screen.
-
----
-
-## What we need from the user
-
-1. **Sample images** — one citizenship (front and back), one passport, one
-   national identity card. Blank or fake is fine. These decide the final
-   field list.
-2. **A Claude API key** — from platform.claude.com. Goes in `.env.local`,
-   never in git, never pasted in chat.
-3. **Confirm the field lists above** once the samples are in.
+6. Frontend: step 5 review screen, with an "Extracting details..." screen
+   while it waits.

@@ -8,16 +8,18 @@
     "start": "next start",
     "lint": "eslint",
     "migrate": "node --env-file=.env.local scripts/migrate.mjs",
-    "test:account": "node --env-file=.env.local scripts/test-account.mjs"
+    "test:account": "node --env-file=.env.local scripts/test-account.mjs",
+    "test:read": "node --env-file=.env.local scripts/test-read.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "next": "16.3.6",
     "pdfjs-dist": "^6.3.289",
+    "pg": "^8.23.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "pg": "^8.23.0"
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

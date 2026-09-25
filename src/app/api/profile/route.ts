@@ -4,11 +4,14 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth";
 import {
   ACCOUNT_TYPES,
+  ID_DOC_TYPES,
+  clearIdDocuments,
   isValidPhone,
   loadAccount,
   normalisePhone,
   withSignedUrls,
   type AccountType,
+  type IdDocType,
 } from "@/lib/profile";
 
 const TEXT_FIELDS = [
@@ -66,6 +69,19 @@ export async function PATCH(request: NextRequest) {
       errors.account_type = "Choose individual or company";
     } else {
       update.account_type = value;
+    }
+  }
+
+  // Step 4: which ID document the supplier says they have.
+  let idDocTypeChanged = false;
+
+  if ("id_doc_type" in body) {
+    const value = text(body.id_doc_type);
+    if (value && !ID_DOC_TYPES.includes(value as IdDocType)) {
+      errors.id_doc_type = "Choose citizenship or national identity";
+    } else {
+      update.id_doc_type = value;
+      idDocTypeChanged = value !== profile.id_doc_type;
     }
   }
 
@@ -149,6 +165,11 @@ export async function PATCH(request: NextRequest) {
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+
+  // Old photos belong to the old document, so they go before the swap.
+  if (idDocTypeChanged) {
+    await clearIdDocuments(profile.id);
   }
 
   const supabase = await createClient();

@@ -238,7 +238,7 @@ async function main() {
     });
     expect(status, 400, "status");
     expectHas(body.missing.bank, "bank_name", "missing bank");
-    expectHas(body.missing.documents, "id_front", "missing documents");
+    expectHas(body.missing.documents, "id_doc_type", "missing documents");
   });
 
   await check("half-filled bank details are refused", async () => {
@@ -269,6 +269,48 @@ async function main() {
     expect(body.bank.branch, "Jomsom", "branch");
   });
 
+  await check("uploading before picking a document type is refused", async () => {
+    const { status } = await supplier.api.upload(
+      "citizenship_front",
+      PNG,
+      "x.png",
+      "image/png",
+    );
+    expect(status, 400, "status");
+  });
+
+  await check("a made-up document type is refused", async () => {
+    const { status } = await supplier.api.json("/api/profile", "PATCH", {
+      id_doc_type: "drivers_licence",
+    });
+    expect(status, 400, "status");
+  });
+
+  await check("picking citizenship asks for a front and a back", async () => {
+    const { status } = await supplier.api.json("/api/profile", "PATCH", {
+      id_doc_type: "citizenship",
+    });
+    expect(status, 200, "status");
+
+    const { body } = await supplier.api.call("/api/profile/documents");
+    expect(
+      body.needed.map((d) => d.doc_type),
+      ["citizenship_front", "citizenship_back"],
+      "files asked for",
+    );
+  });
+
+  await check("picking the paper document asks for one file only", async () => {
+    await supplier.api.json("/api/profile", "PATCH", { id_doc_type: "nid_paper" });
+    const { body } = await supplier.api.call("/api/profile/documents");
+    expect(
+      body.needed.map((d) => d.doc_type),
+      ["nid_paper"],
+      "files asked for",
+    );
+    await supplier.api.json("/api/profile", "PATCH", { id_doc_type: "citizenship" });
+  });
+
   await check("a document we do not ask for is refused", async () => {
     const { status } = await supplier.api.upload(
       "registration_certificate",
@@ -281,7 +323,7 @@ async function main() {
 
   await check("a file type we do not allow is refused", async () => {
     const { status } = await supplier.api.upload(
-      "id_front",
+      "citizenship_front",
       Buffer.from("hello"),
       "notes.txt",
       "text/plain",
@@ -291,7 +333,7 @@ async function main() {
 
   await check("a file over 5 MB is refused", async () => {
     const { status, body } = await supplier.api.upload(
-      "id_front",
+      "citizenship_front",
       Buffer.alloc(6 * 1024 * 1024, 1),
       "big.png",
       "image/png",
@@ -305,30 +347,43 @@ async function main() {
   let firstFrontPath = null;
   await check("citizenship front uploads", async () => {
     const { status, body } = await supplier.api.upload(
-      "id_front",
+      "citizenship_front",
       PNG,
       "front.png",
       "image/png",
     );
     expect(status, 201, "status");
-    expect(body.document.doc_type, "id_front", "doc type");
+    expect(body.document.doc_type, "citizenship_front", "doc type");
     if (!body.document.url) throw new Error("no link to open the file");
     firstFrontPath = body.document.file_path;
   });
 
-  await check("citizenship back uploads", async () => {
-    const { status } = await supplier.api.upload(
-      "id_back",
+  await check("a PDF of an ID document is refused", async () => {
+    const { status, body } = await supplier.api.upload(
+      "citizenship_back",
       PDF,
       "back.pdf",
       "application/pdf",
+    );
+    expect(status, 400, "status");
+    if (!String(body.error).includes("photo")) {
+      throw new Error(`unclear message: ${body.error}`);
+    }
+  });
+
+  await check("citizenship back uploads", async () => {
+    const { status } = await supplier.api.upload(
+      "citizenship_back",
+      PNG,
+      "back.png",
+      "image/png",
     );
     expect(status, 201, "status");
   });
 
   await check("uploading again replaces the old file", async () => {
     const { status, body } = await supplier.api.upload(
-      "id_front",
+      "citizenship_front",
       PNG,
       "front-v2.png",
       "image/png",
@@ -355,6 +410,80 @@ async function main() {
       `${URL_}/storage/v1/object/public/verification-docs/${doc.file_path}`,
     );
     if (open.ok) throw new Error("the file can be opened by anyone");
+  });
+
+  // -------------------------------------------------------------------------
+  console.log("\nThe details read off the document");
+
+  await check("submit is blocked until the details are checked", async () => {
+    const { status, body } = await supplier.api.call("/api/profile/submit", {
+      method: "POST",
+    });
+    expect(status, 400, "status");
+    expectHas(body.missing.identity, "identity_details", "missing identity");
+  });
+
+  await check("details with no document number are refused", async () => {
+    const { status } = await supplier.api.json("/api/profile/identity", "PUT", {
+      full_name_en: "Utsarga Adhikari",
+    });
+    expect(status, 400, "status");
+  });
+
+  await check("the checked details are saved", async () => {
+    const { status, body } = await supplier.api.json(
+      "/api/profile/identity",
+      "PUT",
+      {
+        document_number: "27-01-77-04275",
+        full_name_en: "UTSARGA ADHIKARI",
+        full_name_np: "उत्सर्ग अधिकारी",
+        gender: "Male",
+        date_of_birth_bs: "2059-07-21",
+        date_of_birth_ad: "2002-11-07",
+        date_of_birth_ad_source: "printed",
+        permanent_district_en: "Kathmandu",
+        permanent_ward: "6",
+        father_name_np: "उमेश प्रसाद अधिकारी",
+        citizenship_kind_np: "वंशज",
+      },
+    );
+    expect(status, 200, "status");
+    expect(body.identity.document_number, "27-01-77-04275", "number");
+    expect(body.identity.date_of_birth_ad, "2002-11-07", "western birth date");
+    expect(body.identity.date_of_birth_ad_source, "printed", "date source");
+    expect(body.identity.doc_type, "citizenship", "document type");
+  });
+
+  await check("both scripts are kept, nothing is translated", async () => {
+    const { body } = await supplier.api.call("/api/profile/identity");
+    expect(body.identity.full_name_en, "UTSARGA ADHIKARI", "English name");
+    expect(
+      body.identity.full_name_np,
+      "उत्सर्ग अधिकारी",
+      "Nepali name",
+    );
+  });
+
+  await check("a date that is not a real date is dropped, not saved", async () => {
+    const { status, body } = await supplier.api.json(
+      "/api/profile/identity",
+      "PUT",
+      { document_number: "27-01-77-04275", issue_date_ad: "05 Baisakh 2077" },
+    );
+    expect(status, 200, "status");
+    expect(body.identity.issue_date_ad, null, "issue date");
+    expect(body.identity.issue_date_ad_source, null, "issue date source");
+  });
+
+  await check("a field the passport had is not saved on a citizenship", async () => {
+    const { status, body } = await supplier.api.json(
+      "/api/profile/identity",
+      "PUT",
+      { document_number: "27-01-77-04275", surname_en: "ADHIKARI" },
+    );
+    expect(status, 200, "status");
+    expect(body.identity.surname_en, null, "surname");
   });
 
   await check("submit now works", async () => {
@@ -472,8 +601,11 @@ async function main() {
     const blocked = await buyer.api.call("/api/profile/submit", { method: "POST" });
     expect(blocked.status, 400, "status");
 
-    await buyer.api.upload("id_front", PNG, "p1.png", "image/png");
-    await buyer.api.upload("id_back", PNG, "p2.png", "image/png");
+    await buyer.api.json("/api/profile", "PATCH", { id_doc_type: "nid_paper" });
+    await buyer.api.upload("nid_paper", PNG, "p1.png", "image/png");
+    await buyer.api.json("/api/profile/identity", "PUT", {
+      document_number: "023-456-2130",
+    });
 
     const { status, body } = await buyer.api.call("/api/profile/submit", {
       method: "POST",
@@ -596,11 +728,12 @@ async function main() {
   // picture needs: a signed link and the file type.
   await check("the form is given a signed link for each uploaded file", async () => {
     await fresh.api.json("/api/profile", "PATCH", { account_type: "individual" });
-    await fresh.api.upload("id_front", PNG, "front.png", "image/png");
-    await fresh.api.upload("id_back", PDF, "back.pdf", "application/pdf");
+    await fresh.api.json("/api/profile", "PATCH", { id_doc_type: "citizenship" });
+    await fresh.api.upload("citizenship_front", PNG, "front.png", "image/png");
+    await fresh.api.upload("citizenship_back", PNG, "back.png", "image/png");
 
     const { html } = await fresh.api.page("/onboarding");
-    for (const text of ["front.png", "back.pdf", "image/png", "application/pdf"]) {
+    for (const text of ["front.png", "back.png", "image/png"]) {
       if (!html.includes(text)) throw new Error(`"${text}" was not passed`);
     }
     if (!html.includes("verification-docs") || !html.includes("token=")) {

@@ -51,6 +51,7 @@ export function AccountForm({
 
   const [form, setForm] = useState({
     account_type: initialProfile.account_type ?? "",
+    id_doc_type: initialProfile.id_doc_type ?? "",
     full_name: initialProfile.full_name ?? "",
     company_name: initialProfile.company_name ?? "",
     pan_vat: initialProfile.pan_vat ?? "",
@@ -78,7 +79,14 @@ export function AccountForm({
   }, [isSupplier, profile.role]);
 
   const current = steps[step];
-  const needed = form.account_type ? requiredDocs[form.account_type] : [];
+  // Company files are fixed. An individual's files depend on which ID
+  // document they picked in step 4, so there is nothing to ask for until then.
+  const needed =
+    form.account_type === "company"
+      ? requiredDocs.company
+      : form.id_doc_type
+        ? requiredDocs[form.id_doc_type]
+        : [];
 
   // --- talking to the backend -----------------------------------------------
 

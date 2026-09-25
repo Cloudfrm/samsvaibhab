@@ -5,8 +5,10 @@ import {
   ALLOWED_MIME,
   DOC_LABELS,
   DOCS_BUCKET,
+  ID_DOC_MIME,
   MAX_FILE_BYTES,
-  REQUIRED_DOCS,
+  isIdDoc,
+  requiredDocs,
   withSignedUrls,
   type DocumentRow,
 } from "@/lib/profile";
@@ -36,7 +38,7 @@ export async function GET() {
     .order("created_at", { ascending: true });
 
   const documents = (data ?? []) as DocumentRow[];
-  const needed = profile.account_type ? REQUIRED_DOCS[profile.account_type] : [];
+  const needed = requiredDocs(profile.account_type, profile.id_doc_type);
 
   return NextResponse.json({
     documents: await withSignedUrls(documents),
@@ -74,13 +76,18 @@ export async function POST(request: NextRequest) {
 
   const docType = String(form.get("doc_type") ?? "");
   const file = form.get("file");
+  const allowed = requiredDocs(profile.account_type, profile.id_doc_type);
 
-  if (!REQUIRED_DOCS[profile.account_type].includes(docType)) {
+  if (profile.account_type === "individual" && !profile.id_doc_type) {
     return NextResponse.json(
-      {
-        error: "Not a document we ask for",
-        allowed: REQUIRED_DOCS[profile.account_type],
-      },
+      { error: "Choose which ID document you have first" },
+      { status: 400 },
+    );
+  }
+
+  if (!allowed.includes(docType)) {
+    return NextResponse.json(
+      { error: "Not a document we ask for", allowed },
       { status: 400 },
     );
   }
@@ -96,7 +103,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!ALLOWED_MIME.includes(file.type)) {
+  // The AI has to look at an ID document, so those must be pictures.
+  if (isIdDoc(docType)) {
+    if (!ID_DOC_MIME.includes(file.type)) {
+      return NextResponse.json(
+        { error: "Send a photo of the document: JPG, PNG or WEBP" },
+        { status: 400 },
+      );
+    }
+  } else if (!ALLOWED_MIME.includes(file.type)) {
     return NextResponse.json(
       { error: "Only JPG, PNG, WEBP or PDF files are allowed" },
       { status: 400 },
