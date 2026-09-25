@@ -8,14 +8,16 @@ const MODEL = "claude-sonnet-5";
 const SYSTEM = `You read Nepali identity documents and copy the details off them.
 
 Copy only. Never translate, never tidy up, never fill in a likely answer. If a
-field is not printed on the document, leave it out. A wrong guess here is far
-worse than a blank, because it goes on a verification record.
+field is not printed on the document, answer with an empty string. A wrong
+guess here is far worse than a blank, because it goes on a verification
+record. Answer every field: an empty string is the right answer for anything
+the document does not show.
 
 Names and places are printed in two scripts on these documents:
   * a field ending in _np takes the Nepali (Devanagari) text exactly as printed
   * a field ending in _en takes the English text exactly as printed
 If only one script is printed for a field, fill only that one and leave the
-other out. Do not transliterate one into the other.
+other empty. Do not transliterate one into the other.
 
 Dates come in two calendars:
   * a field ending in _bs takes the Bikram Sambat date. Write it with western
@@ -28,6 +30,15 @@ you copied it straight off the document, set *_source to "printed".
 
 Ward numbers and document numbers keep the western digits as printed, with any
 hyphens. Gender is "Male", "Female" or "Other".
+
+Decide which field a value belongs to from the small printed label beside it,
+never from where it sits on the card or from how the name sounds. On a
+national identity card those labels are tiny and are printed in Nepali and
+English together, for example "आमाको नाम / MOTHER'S NAME" and
+"बालको नाम / FATHER'S NAME". Read the label before you copy the value.
+A spouse's name is on the back of the card, not the front. If you cannot read
+the label next to a name, leave that name out rather than putting it in a
+field it might not belong to.
 
 Set readable to false only when the photos are too blurred, dark or cropped to
 read the main details. When you set it to false, say why in one short sentence
@@ -52,22 +63,22 @@ function schemaFor(docType: IdDocType) {
 
   for (const field of FIELDS[docType]) {
     properties[field] = { type: "string" };
-  }
 
-  // Each date pair says whether the western date was printed or worked out.
-  for (const field of FIELDS[docType]) {
+    // Each date pair says whether the western date was printed or worked out.
     if (field.endsWith("_ad")) {
       properties[`${field}_source`] = {
         type: "string",
-        enum: ["printed", "converted"],
+        enum: ["printed", "converted", ""],
       };
     }
   }
 
+  // Every field is required, with an empty string for "not printed". Optional
+  // fields are capped at 24 and these documents have more than that.
   return {
     type: "object",
     properties,
-    required: ["readable", "problem"],
+    required: Object.keys(properties),
     additionalProperties: false,
   };
 }
@@ -89,7 +100,7 @@ export async function readDocument(
 
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 4000,
+    max_tokens: 16000,
     system: SYSTEM,
     thinking: { type: "adaptive" },
     output_config: {
@@ -117,7 +128,8 @@ export async function readDocument(
     ],
   });
 
-  if (response.stop_reason === "refusal") {
+  if (response.stop_reason !== "end_turn") {
+    // A refusal, or the answer was cut short before it was finished.
     return { ok: false, reason: "We could not read this document." };
   }
 

@@ -37,6 +37,9 @@ const CASES = [
       date_of_birth_bs: "2059-07-21",
       permanent_district_en: "Kathmandu",
       permanent_ward: "6",
+      father_name_np: "उमेश प्रसाद अधिकारी",
+      citizenship_kind_np: "वंशज",
+      issue_date_bs: "2077-09-05",
     },
   },
   {
@@ -52,6 +55,10 @@ const CASES = [
       date_of_birth_ad: "1978-02-05",
       date_of_birth_bs: "2034-10-22",
       nationality: "Nepalese",
+      // It used to read the mother's name off the front of the card and put
+      // it in the spouse field, so both sides of that are checked.
+      father_name_np: "विष्णु प्रसाद पोखरेल",
+      spouse_name_np: null,
     },
   },
 ];
