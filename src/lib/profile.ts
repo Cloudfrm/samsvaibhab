@@ -60,7 +60,7 @@ export function missingFromProfile(profile: Profile): string[] {
 
   if (profile.account_type === "individual") {
     if (!has(profile.full_name)) missing.push("full_name");
-    if (!has(profile.id_number)) missing.push("id_number");
+    // id_number is still saved and read, it is just not asked for here yet.
   } else {
     if (!has(profile.company_name)) missing.push("company_name");
     if (!has(profile.pan_vat)) missing.push("pan_vat");

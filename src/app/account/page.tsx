@@ -80,9 +80,7 @@ export default async function AccountPage() {
             <Row label="PAN / VAT" value={profile.pan_vat} />
             <Row label="Registration no." value={profile.registration_number} />
           </>
-        ) : (
-          <Row label="ID number" value={profile.id_number} />
-        )}
+        ) : null}
         <Row label="Phone" value={profile.phone} />
         <Row label="Country" value={profile.country} />
         <Row

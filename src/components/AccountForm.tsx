@@ -49,7 +49,6 @@ export function AccountForm({
     company_name: initialProfile.company_name ?? "",
     pan_vat: initialProfile.pan_vat ?? "",
     registration_number: initialProfile.registration_number ?? "",
-    id_number: initialProfile.id_number ?? "",
     phone: initialProfile.phone ?? "",
     country: initialProfile.country ?? (initialProfile.role === "supplier" ? "NP" : ""),
     district: initialProfile.district ?? "",
@@ -135,7 +134,6 @@ export function AccountForm({
           : {
               account_type: form.account_type,
               full_name: form.full_name,
-              id_number: form.id_number,
               phone: form.phone,
             },
       );
@@ -301,12 +299,6 @@ export function AccountForm({
                     onChange={(v) => set("full_name", v)}
                     error={errors.full_name}
                   />
-                  <Field
-                    label="Citizenship or passport number"
-                    value={form.id_number}
-                    onChange={(v) => set("id_number", v)}
-                    error={errors.id_number}
-                  />
                 </>
               )}
               <Field
@@ -451,10 +443,7 @@ export function AccountForm({
                 <Row label="Registration no." value={form.registration_number} />
               </>
             ) : (
-              <>
-                <Row label="Name" value={form.full_name} />
-                <Row label="ID number" value={form.id_number} />
-              </>
+              <Row label="Name" value={form.full_name} />
             )}
             <Row label="Phone" value={form.phone} />
             <Row

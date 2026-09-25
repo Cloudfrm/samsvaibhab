@@ -442,11 +442,12 @@ async function main() {
     expect(status, 400, "status");
   });
 
+  // No id_number on purpose: it is not asked for in the form yet, so it must
+  // not block anyone from finishing.
   await check("a buyer can be in any country and needs a city", async () => {
     const { status, body } = await buyer.api.json("/api/profile", "PATCH", {
       account_type: "individual",
       full_name: "Ahmed Al Mansoori",
-      id_number: "784-1990-1234567-1",
       phone: "+971501234567",
       country: "AE",
     });
@@ -580,6 +581,13 @@ async function main() {
     expect(status, 200, "status");
     for (const text of ["Who are you?", "Step 1 of", "A person", "A company"]) {
       if (!html.includes(text)) throw new Error(`"${text}" is not on the page`);
+    }
+  });
+
+  await check("the form no longer asks for a citizenship number", async () => {
+    const { html } = await fresh.api.page("/onboarding");
+    if (html.includes("Citizenship or passport number")) {
+      throw new Error("the field is still on the page");
     }
   });
 
