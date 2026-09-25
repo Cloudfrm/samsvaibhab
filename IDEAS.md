@@ -126,3 +126,170 @@ Passport. Dropped for now, can be added later the same way.
 5. ~~Frontend: step 4, pick your document, and the uploads.~~
 6. ~~Frontend: step 5 review screen, with an "Extracting details..." screen
    while it waits.~~
+
+---
+
+## Idea 2 — Drop company documents, then build the AI admin dashboard
+
+Status: **built and tested, backend only. The emails are not wired up yet —
+waiting on the Resend key.**
+
+### Part 1 — Company accounts upload nothing at first
+
+The "upload your documents" part for an individual — a farmer or a person —
+is good. But when they go the company route, we can ask them for the company
+registration certificate and the PAN or VAT certificate later. So they don't
+have to upload any documents. I want that removed at first.
+
+### Part 2 — The admin dashboard
+
+Right now we've only built the supplier side. We've not built the buyer part
+yet.
+
+For the supplier part: when they hit **Send for approval**, I want the
+approval to come to an admin dashboard.
+
+- We're going to have to create an admin dashboard, and that's going to be a
+  completely different route.
+- We're going to have to protect the admin route. That's the most important
+  thing.
+- The admin dashboard is going to be completely AI powered. We're going to
+  set some rules — a lot of discussion on this — on what sorts of accounts
+  the AI should approve and what sorts it should not.
+
+The auto-approval from the AI part, we'll work on that later. The AI is
+never actually going to approve it by itself.
+
+### What we work on now
+
+AI fetches everything that comes in. We give it a set of rules, and the AI
+sets the status of a contact, or user detail, or any detail that comes in
+from the supplier side.
+
+- If it's ready, it marks it **ready to approve**.
+- If it's missing something, it sets the status **missing some documents**,
+  and puts a summary on what exactly is missing.
+
+If something is missing, it shouldn't even come to the human. Human in the
+loop is always when it's ready for approval — the human approves it at last.
+
+If there's a decline for any reason, it sends an email to the registered
+user. The email says this is not available, so you need to come back and put
+this there, or upload this there, or whatever is not there. Just a
+description. They come back, fix it, and resubmit.
+
+Admin is going to do all the approvals.
+
+When something is ready to approve, the AI sends the admin an email to say
+the approval is ready. It will not auto approve. Auto approval comes later.
+
+### Where this sits
+
+Our admin is going to be complete AI. This is the first step towards it —
+registering a supplier.
+
+Once that's approved, then we're going to have to create the supplier form
+fill-up and all that. But we'll do that later. For now, we build this.
+
+The admin dashboard is going to be an AI chatbot dashboard that automates
+everything. But we don't work on the frontend yet. We build the backend
+first.
+
+---
+
+## Idea 2 — decisions made
+
+| Question | Decision |
+|---|---|
+| Company documents | Drop both file uploads. Companies still **type** their PAN or VAT number and company name. Certificates are asked for later, after approval. |
+| If the AI finds something missing | Account goes back to **incomplete**. Supplier gets the email, fixes it, sends for approval again. The admin never sees it. |
+| Email service | **Resend.** Needs an API key and a from-address. |
+| The rules | I write a first list in plain English. You edit the words. |
+| Where the rules live | **In the database**, with a version number, like the terms pages already are. You edit them from the admin dashboard once the frontend is built. The AI reads the current version on every check, so an edit takes effect straight away — no code change, no deploy. |
+| Who is admin | `tech@cloudfrm.ai`. |
+| When the AI runs | **Right away** when the supplier hits Send for approval. |
+| What the AI looks at | The typed details **and the ID photos again**, so it can also say a photo is blurry or upside down. About 1.5 cents per check. |
+| Human in the loop | **None, for registration.** If everything is good, the **AI approves** the account itself. |
+| Admin account | `tech@cloudfrm.ai` is flipped to role **admin**. Its leftover supplier data stays but is ignored. Supplier testing moves to another email. |
+| Resend setup | Already set up. You give me the **API key** and the **from-address**. |
+| Grey cases | Only **two** answers. A name that does not match, or a photo that looks edited, is **sent back to the supplier** with a plain description of what to fix. Nothing lands on a human. |
+| Admin email | **One summary a day** of what the AI did — approved these, sent these back, and why. The admin watches, does not act. The supplier's "something is missing" email still goes out straight away. |
+| Stuck supplier | If the AI sends the same account back **3 times**, it still does not approve, but the admin gets an email with the history so a stuck person can be helped. |
+| Undo an approval | The admin can **suspend** an approved account, with a reason and an email. The safety net if the AI gets one wrong. |
+| Model | **Sonnet 5**, the same one that already reads the ID documents. |
+| Approving while backend-only | Approve, reject and suspend **endpoints plus a test script**. The chatbot dashboard plugs into these same endpoints later. |
+| Daily email time | **6:00 pm Nepal time.** |
+| Supplier approved email | **Yes** — a short welcome email when the AI approves them. |
+| Chatbot dashboard | **Not in this build.** No frontend at all, and no chat endpoint. We think about it later. |
+| Company uploads | Removed from the backend rules **and** the two upload boxes come off the screen. |
+| Order | **One branch**, everything together. |
+
+---
+
+## Idea 2 — what gets built
+
+**One branch. Backend, plus the one small screen edit for the company boxes.**
+
+### 1. Company accounts stop uploading documents
+The two upload boxes go. Companies still type their company name and PAN or
+VAT number. We ask for the certificates after approval, later.
+
+### 2. A rules document, kept in the database
+Plain English, with a version number. I write the first one, you edit the
+words. The AI reads the current version on every check.
+
+### 3. The AI check, when the supplier hits Send for approval
+Sonnet 5 looks at the typed details and the ID photos, against your rules,
+and gives one of two answers:
+
+- **Good** → the AI **approves** the account. Supplier gets a welcome email.
+- **Not good** → the account goes back to **incomplete**, and the supplier
+  gets an email saying exactly what to fix. No human anywhere.
+
+Missing name, unreadable photo, name on the document not matching the
+account — all of it goes back to the supplier in plain words.
+
+### 4. The stuck supplier
+Sent back 3 times and still not right — the AI still does not approve, but
+the admin gets an email with the history so the person can be helped.
+
+### 5. Emails (Resend)
+| To | When |
+|---|---|
+| Supplier | Approved — short welcome. |
+| Supplier | Sent back — what to fix. |
+| Admin | 6:00 pm daily — what the AI approved and sent back, and why. |
+| Admin | A supplier is stuck after 3 tries. |
+
+### 6. Admin, backend only
+`tech@cloudfrm.ai` becomes the admin. The admin route is protected. Plain
+endpoints to list accounts, approve, reject, and **suspend** an already
+approved account. A test script proves the whole flow.
+
+### What I need from you
+1. **Resend API key** and the **from-address**. Put them in `.env.local`,
+   never in chat.
+2. Another email to test the supplier side with, since `tech@cloudfrm.ai`
+   becomes the admin.
+3. Your edits to the first rules document, once I write it.
+
+### Not in this build
+The chatbot dashboard. Any admin screens. The buyer side. The supplier form
+fill-up that comes after approval.
+
+### Built on 25 September 2026
+
+- Company uploads gone, backend and screen.
+- `onboarding-rules.md` — the rules, in plain English. Edit the file and run
+  `npm run rules:push` to make the AI follow the new words. Version 1 is also
+  seeded into the database, so a fresh deploy always has rules.
+- Send for approval now runs the check there and then, about 6 seconds, and
+  either approves the account or sends it back with a note.
+- Every decision is written down, with which version of the rules it used.
+- Admin endpoints: list, see one in full with the decision history, approve,
+  reject with a reason, suspend with a reason. `tech@cloudfrm.ai` is admin.
+- `npm run test:account` — 69 checks, free.
+  `npm run test:review` — the real AI check, about 10 cents a run.
+
+Still to do: the four emails, once the Resend key is in. The spots are marked
+`TODO email` in the code.

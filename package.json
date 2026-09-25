@@ -9,7 +9,9 @@
     "lint": "eslint",
     "migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "test:account": "node --env-file=.env.local scripts/test-account.mjs",
-    "test:read": "node --env-file=.env.local scripts/test-read.mjs"
+    "test:read": "node --env-file=.env.local scripts/test-read.mjs",
+    "test:review": "node --env-file=.env.local scripts/test-review.mjs",
+    "rules:push": "node --env-file=.env.local scripts/rules-push.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

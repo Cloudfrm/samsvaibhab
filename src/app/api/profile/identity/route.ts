@@ -3,7 +3,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth";
 import { cleanFields } from "@/lib/identity";
 import { readDocument } from "@/lib/read-document";
-import { DOCS_BUCKET, requiredDocs, type DocumentRow } from "@/lib/profile";
+import { loadPhotos, requiredDocs } from "@/lib/profile";
 
 // Reading the photos takes 5 to 15 seconds, so the default limit is too short.
 export const maxDuration = 60;
@@ -12,44 +12,6 @@ export const maxDuration = 60;
  * POST — read the uploaded photos and give back the details. Nothing is saved.
  * PUT  — save the details the supplier has checked and corrected.
  */
-
-/** The photos this supplier has uploaded, in the order we ask for them. */
-async function loadPhotos(profileId: string, needed: string[]) {
-  const admin = createAdminClient();
-
-  const { data } = await admin
-    .from("verification_documents")
-    .select("doc_type, file_path, mime_type")
-    .eq("profile_id", profileId)
-    .in("doc_type", needed);
-
-  const rows = (data ?? []) as Pick<
-    DocumentRow,
-    "doc_type" | "file_path" | "mime_type"
-  >[];
-
-  const missing = needed.filter((t) => !rows.some((r) => r.doc_type === t));
-  if (missing.length > 0) return { missing, photos: [] };
-
-  const byType = new Map(rows.map((r) => [r.doc_type, r]));
-
-  const photos = await Promise.all(
-    needed.map(async (docType) => {
-      const row = byType.get(docType)!;
-      const { data: file } = await admin.storage
-        .from(DOCS_BUCKET)
-        .download(row.file_path);
-
-      const bytes = Buffer.from(await file!.arrayBuffer());
-      return {
-        mimeType: row.mime_type ?? "image/jpeg",
-        base64: bytes.toString("base64"),
-      };
-    }),
-  );
-
-  return { missing: [], photos };
-}
 
 export async function POST() {
   const profile = await getCurrentProfile();

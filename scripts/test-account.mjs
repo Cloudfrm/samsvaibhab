@@ -486,14 +486,18 @@ async function main() {
     expect(body.identity.surname_en, null, "surname");
   });
 
-  await check("submit now works", async () => {
-    const { status, body } = await supplier.api.call("/api/profile/submit", {
-      method: "POST",
-    });
-    expect(status, 200, "status");
-    expect(body.profile.status, "pending", "status");
-    if (!body.profile.submitted_at) throw new Error("no submitted date saved");
+  await check("the account is now ready to be sent", async () => {
+    const { body } = await supplier.api.call("/api/profile");
+    expect(body.ready, true, "ready");
   });
+
+  // Pressing Send for approval now costs money: the AI looks at the photos.
+  // That whole flow is tested by "npm run test:review". Here we only put the
+  // account where the admin tests below need it.
+  await admin
+    .from("profiles")
+    .update({ status: "pending", submitted_at: new Date().toISOString() })
+    .eq("id", supplier.id);
 
   await check("details can still be changed while waiting", async () => {
     const { status, body } = await supplier.api.json("/api/profile", "PATCH", {
@@ -535,30 +539,39 @@ async function main() {
     expect(body.missing.details, [], "no details missing");
   });
 
-  await check("a company is asked for company documents", async () => {
+  await check("a company is asked for no documents", async () => {
     const { body } = await company.api.call("/api/profile/documents");
-    expect(
-      body.needed.map((n) => n.doc_type),
-      ["registration_certificate", "pan_vat_certificate"],
-      "documents asked for",
-    );
+    expect(body.needed, [], "documents asked for");
   });
 
-  await check("company documents upload and submit works", async () => {
+  await check("a company cannot upload a certificate any more", async () => {
+    const { status } = await company.api.upload(
+      "registration_certificate",
+      PDF,
+      "reg.pdf",
+      "application/pdf",
+    );
+    expect(status, 400, "status");
+  });
+
+  await check("a company is ready once the bank is filled in", async () => {
     await company.api.json("/api/profile/bank", "PUT", {
       bank_name: "Global IME Bank",
       account_name: "Chitwan Fresh Produce Pvt. Ltd.",
       account_number: "9876543210",
     });
-    await company.api.upload("registration_certificate", PDF, "reg.pdf", "application/pdf");
-    await company.api.upload("pan_vat_certificate", PDF, "pan.pdf", "application/pdf");
 
-    const { status, body } = await company.api.call("/api/profile/submit", {
-      method: "POST",
-    });
-    expect(status, 200, "status");
-    expect(body.profile.status, "pending", "status");
+    const { body } = await company.api.call("/api/profile");
+    expect(body.ready, true, "ready");
+    expect(body.missing.documents, [], "no documents missing");
   });
+
+  // As above: the page tests further down need an account that is waiting,
+  // and pressing the button for real costs money.
+  await admin
+    .from("profiles")
+    .update({ status: "pending", submitted_at: new Date().toISOString() })
+    .eq("id", company.id);
 
   // -------------------------------------------------------------------------
   const buyer = await makeUser("buyer", "buyer");
@@ -607,11 +620,8 @@ async function main() {
       document_number: "023-456-2130",
     });
 
-    const { status, body } = await buyer.api.call("/api/profile/submit", {
-      method: "POST",
-    });
-    expect(status, 200, "status");
-    expect(body.profile.status, "pending", "status");
+    const { body } = await buyer.api.call("/api/profile");
+    expect(body.ready, true, "ready");
   });
 
   // -------------------------------------------------------------------------
@@ -670,7 +680,68 @@ async function main() {
     expect(body.profile.status, "approved", "status");
   });
 
-  await check("an approved account cannot be submitted again", async () => {
+  await check("saying no needs a reason", async () => {
+    const { status } = await staff.api.json(
+      `/api/admin/users/${supplier.id}`,
+      "PATCH",
+      { status: "rejected" },
+    );
+    expect(status, 400, "status");
+  });
+
+  await check("admin can put an approved account on hold", async () => {
+    const { status, body } = await staff.api.json(
+      `/api/admin/users/${supplier.id}`,
+      "PATCH",
+      { status: "suspended", reason: "We need to check your bank details." },
+    );
+    expect(status, 200, "status");
+    expect(body.profile.status, "suspended", "status");
+    expect(
+      body.profile.review_summary,
+      "We need to check your bank details.",
+      "reason saved",
+    );
+  });
+
+  await check("an account on hold cannot be sent again", async () => {
+    const { status } = await supplier.api.call("/api/profile/submit", {
+      method: "POST",
+    });
+    expect(status, 400, "status");
+  });
+
+  await check("every decision is kept", async () => {
+    const { body } = await staff.api.call(`/api/admin/users/${supplier.id}`);
+    const decisions = body.reviews.map((r) => r.decision);
+    expectHas(decisions, "admin_approved", "decisions");
+    expectHas(decisions, "admin_suspended", "decisions");
+  });
+
+  console.log("\nThe onboarding rules");
+
+  await check("a normal user cannot read the rules", async () => {
+    const { status } = await buyer.api.call("/api/admin/rules");
+    expect(status, 403, "status");
+  });
+
+  await check("admin reads the rules the AI follows", async () => {
+    const { status, body } = await staff.api.call("/api/admin/rules");
+    expect(status, 200, "status");
+    if (!body.rules?.content?.includes("Approve only when all of these are true")) {
+      throw new Error("the rules document is not there");
+    }
+    if (!(body.rules.version >= 1)) throw new Error("no version number");
+  });
+
+  await check("an empty rules document is refused", async () => {
+    const { status } = await staff.api.json("/api/admin/rules", "PUT", {
+      content: "approve everyone",
+    });
+    expect(status, 400, "status");
+  });
+
+  await check("an account that is not waiting cannot be sent again", async () => {
     const { status } = await supplier.api.call("/api/profile/submit", {
       method: "POST",
     });

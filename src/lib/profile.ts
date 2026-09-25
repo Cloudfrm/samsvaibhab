@@ -24,8 +24,9 @@ export const ID_DOC_LABELS: Record<IdDocType, string> = {
   nid_paper: "National identity paper document",
 };
 
-// Company files never changed: still a plain upload, nothing read from them.
-export const COMPANY_DOCS = ["registration_certificate", "pan_vat_certificate"];
+// A company uploads nothing when it signs up. It types its company name and
+// its PAN or VAT number, and we ask for the certificates after approval.
+export const COMPANY_DOCS: string[] = [];
 
 /** The files this account still has to upload, by name. */
 export function requiredDocs(
@@ -54,8 +55,6 @@ export const DOC_LABELS: Record<string, string> = {
   nid_card_front: "National identity card (front)",
   nid_card_back: "National identity card (back)",
   nid_paper: "National identity paper document",
-  registration_certificate: "Company registration certificate",
-  pan_vat_certificate: "PAN or VAT certificate",
 };
 
 /** True for the files the AI reads. Those must be photos, never a PDF. */
@@ -288,4 +287,47 @@ export async function withSignedUrls(documents: DocumentRow[]) {
       return { ...doc, url: data?.signedUrl ?? null };
     }),
   );
+}
+
+/**
+ * The photos this account has uploaded, in the order we ask for them, ready
+ * to send to the AI. `missing` is not empty when something has not been
+ * uploaded yet, and then no photos come back.
+ */
+export async function loadPhotos(profileId: string, needed: string[]) {
+  const admin = createAdminClient();
+
+  const { data } = await admin
+    .from("verification_documents")
+    .select("doc_type, file_path, mime_type")
+    .eq("profile_id", profileId)
+    .in("doc_type", needed);
+
+  const rows = (data ?? []) as Pick<
+    DocumentRow,
+    "doc_type" | "file_path" | "mime_type"
+  >[];
+
+  const missing = needed.filter((t) => !rows.some((r) => r.doc_type === t));
+  if (missing.length > 0) return { missing, photos: [] };
+
+  const byType = new Map(rows.map((r) => [r.doc_type, r]));
+
+  const photos = await Promise.all(
+    needed.map(async (docType) => {
+      const row = byType.get(docType)!;
+      const { data: file } = await admin.storage
+        .from(DOCS_BUCKET)
+        .download(row.file_path);
+
+      const bytes = Buffer.from(await file!.arrayBuffer());
+      return {
+        label: DOC_LABELS[docType] ?? docType,
+        mimeType: row.mime_type ?? "image/jpeg",
+        base64: bytes.toString("base64"),
+      };
+    }),
+  );
+
+  return { missing: [], photos };
 }

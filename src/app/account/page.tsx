@@ -17,6 +17,10 @@ const STATUS_COPY = {
     title: "Your account was not approved",
     body: "Please check your details and send them again, or contact us if you think this is a mistake.",
   },
+  suspended: {
+    title: "Your account is on hold",
+    body: "Please get in touch with us so we can sort this out.",
+  },
 } as const;
 
 export default async function AccountPage() {
@@ -61,7 +65,7 @@ export default async function AccountPage() {
       <div className="mt-8 rounded-lg border border-hairline bg-canvas-soft p-6">
         <h2 className="text-[18px] font-medium">{status.title}</h2>
         <p className="mt-2 text-[14px] leading-[1.6] text-ink-mute">
-          {status.body}
+          {profile.review_summary ?? status.body}
         </p>
         <Link
           href="/onboarding"
