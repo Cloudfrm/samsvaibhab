@@ -4,6 +4,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import {
   DOC_LABELS,
   DOC_CHOICES,
+  ID_DOC_LABELS,
   loadAccount,
   withSignedUrls,
 } from "@/lib/profile";
@@ -39,6 +40,7 @@ export default async function OnboardingPage() {
         districts={districts ?? []}
         requiredDocs={DOC_CHOICES}
         docLabels={DOC_LABELS}
+        idDocLabels={ID_DOC_LABELS}
       />
 
       <footer className="px-6 py-8 text-center text-[12px] text-ink-faint">

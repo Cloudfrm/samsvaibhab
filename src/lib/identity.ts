@@ -65,61 +65,102 @@ export type IdentityDetails = {
 
 export type DateSource = "printed" | "converted";
 
-/** The fields every document has. */
-const SHARED = [
-  "document_number",
-  "gender",
-  "date_of_birth_bs",
-  "date_of_birth_ad",
-  "permanent_district_en",
-  "permanent_district_np",
-  "permanent_municipality_en",
-  "permanent_municipality_np",
-  "permanent_ward",
-  "father_name_en",
-  "father_name_np",
-  "mother_name_en",
-  "mother_name_np",
-  "spouse_name_en",
-  "spouse_name_np",
-  "issuing_office_en",
-  "issuing_office_np",
-  "issue_date_bs",
-  "issue_date_ad",
-] as const;
+/**
+ * The details in the order a person would check them, in small groups. Name
+ * first, because that is what anyone looks at first, and the fine print last.
+ * This is the one list: the form, the AI and the saving all read it.
+ */
+type Section = { title: string; fields: string[] };
+
+/** The groups every document shares, after its own naming fields. */
+const COMMON: Section[] = [
+  {
+    title: "Where you live",
+    fields: [
+      "permanent_district_en",
+      "permanent_district_np",
+      "permanent_municipality_en",
+      "permanent_municipality_np",
+      "permanent_ward",
+    ],
+  },
+  {
+    title: "Your family",
+    fields: [
+      "father_name_en",
+      "father_name_np",
+      "mother_name_en",
+      "mother_name_np",
+      "spouse_name_en",
+      "spouse_name_np",
+    ],
+  },
+  {
+    title: "Who issued it",
+    fields: [
+      "issuing_office_en",
+      "issuing_office_np",
+      "issue_date_bs",
+      "issue_date_ad",
+    ],
+  },
+];
+
+export const SECTIONS: Record<IdDocType, Section[]> = {
+  citizenship: [
+    { title: "Your name", fields: ["full_name_en", "full_name_np"] },
+    {
+      title: "The document",
+      fields: [
+        "document_number",
+        "citizenship_kind_en",
+        "citizenship_kind_np",
+        "gender",
+        "date_of_birth_bs",
+        "date_of_birth_ad",
+      ],
+    },
+    {
+      title: "Where you were born",
+      fields: [
+        "birth_district_en",
+        "birth_district_np",
+        "birth_municipality_en",
+        "birth_municipality_np",
+        "birth_ward",
+      ],
+    },
+    ...COMMON,
+  ],
+  nid_card: [
+    {
+      title: "Your name",
+      fields: ["given_name_en", "given_name_np", "surname_en", "surname_np"],
+    },
+    {
+      title: "The document",
+      fields: [
+        "document_number",
+        "nationality",
+        "gender",
+        "date_of_birth_bs",
+        "date_of_birth_ad",
+      ],
+    },
+    ...COMMON,
+  ],
+  // The paper slip is handed out while the card is not yet printed. It carries
+  // the same details, just laid out differently, so we look for the same ones.
+  nid_paper: [],
+};
+
+SECTIONS.nid_paper = SECTIONS.nid_card;
 
 /** Which fields to read and save, per document. Nothing else is accepted. */
 export const FIELDS: Record<IdDocType, readonly string[]> = {
-  citizenship: [
-    ...SHARED,
-    "full_name_en",
-    "full_name_np",
-    "birth_district_en",
-    "birth_district_np",
-    "birth_municipality_en",
-    "birth_municipality_np",
-    "birth_ward",
-    "citizenship_kind_en",
-    "citizenship_kind_np",
-  ],
-  nid_card: [
-    ...SHARED,
-    "surname_en",
-    "surname_np",
-    "given_name_en",
-    "given_name_np",
-    "nationality",
-  ],
-  // The paper slip is handed out while the card is not yet printed. It carries
-  // the same details, just laid out differently, so we look for the same fields.
-  nid_paper: [
-    ...SHARED,
-    "surname_en",
-    "surname_np",
-    "given_name_en",
-    "given_name_np",
-    "nationality",
-  ],
+  citizenship: SECTIONS.citizenship.flatMap((s) => s.fields),
+  nid_card: SECTIONS.nid_card.flatMap((s) => s.fields),
+  nid_paper: SECTIONS.nid_paper.flatMap((s) => s.fields),
 };
 
 /** Short words for the review screen. */

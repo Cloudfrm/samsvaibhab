@@ -6,8 +6,7 @@ A place to keep ideas in clean form.
 
 ## Idea 1 — Upload any ID document, then let AI read it and fill the form
 
-Status: **backend built and tested against the real sample documents.
-Frontend waiting on Stitch designs.**
+Status: **done and working end to end, backend and frontend.**
 
 ### The problem today
 Step 4 of 4 asked for "Citizenship or passport (front)" and "(back)". It was
@@ -124,6 +123,6 @@ Passport. Dropped for now, can be added later the same way.
 3. ~~Backend: the reading endpoint — send images to Claude, get fields back.~~
 4. ~~Test all of the above.~~ `npm run test:account` (61 checks, free) and
    `npm run test:read` (reads the real samples, about 3 cents a run).
-5. Frontend: step 4 dropdown and uploads.
-6. Frontend: step 5 review screen, with an "Extracting details..." screen
-   while it waits.
+5. ~~Frontend: step 4, pick your document, and the uploads.~~
+6. ~~Frontend: step 5 review screen, with an "Extracting details..." screen
+   while it waits.~~
