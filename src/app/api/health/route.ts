@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 
 export async function GET() {
   const supabase = await createClient();
@@ -12,5 +13,17 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ connected: true });
+  // Which database changes this site is actually running on. If this is older
+  // than the newest file in supabase/migrations, the database is behind.
+  const { data } = await createAdminClient()
+    .from("schema_migrations")
+    .select("name")
+    .order("name", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return NextResponse.json({
+    connected: true,
+    database: data?.name ?? "no migrations applied",
+  });
 }
