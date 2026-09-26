@@ -17,6 +17,10 @@ export type Profile = {
   country: string | null;
   district: string | null;
   city: string | null;
+  delivery_location: string | null;
+  state: string | null;
+  pin_code: string | null;
+  special_requirement: string | null;
   submitted_at: string | null;
   reviewed_at: string | null;
   review_summary: string | null;

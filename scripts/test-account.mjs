@@ -603,17 +603,21 @@ async function main() {
     expect(status, 400, "status");
   });
 
-  // No id_number on purpose: it is not asked for in the form yet, so it must
-  // not block anyone from finishing.
-  await check("a buyer can be in any country and needs a city", async () => {
+  // No approval, no ID document, no country or city needed. Just contact
+  // details and a pin code.
+  await check("a buyer needs no country, just contact details and a pin code", async () => {
+    const before = await buyer.api.call("/api/profile");
+    expectHas(before.body.missing.details, "company_name", "missing before");
+    expectHas(before.body.missing.details, "pin_code", "missing before");
+
     const { status, body } = await buyer.api.json("/api/profile", "PATCH", {
-      account_type: "individual",
-      full_name: "Ahmed Al Mansoori",
+      company_name: "Al Mansoori Trading",
       phone: "+971501234567",
-      country: "AE",
     });
     expect(status, 200, "status");
-    expectHas(body.missing.details, "city", "missing");
+    expect(body.missing.details.includes("country"), false, "country not required");
+    expect(body.missing.details.includes("city"), false, "city not required");
+    expectHas(body.missing.details, "pin_code", "still missing pin code");
   });
 
   await check("a buyer is not asked for bank details", async () => {
@@ -629,26 +633,33 @@ async function main() {
     expect(body.missing.bank, [], "no bank asked for");
   });
 
-  await check("a buyer still needs documents before submit", async () => {
+  await check("a buyer does not need documents, just the pin code, to submit", async () => {
     const blocked = await buyer.api.call("/api/profile/submit", { method: "POST" });
     expect(blocked.status, 400, "status");
+    expectHas(blocked.body.missing.details, "pin_code", "missing pin code");
+    expect(blocked.body.missing.documents, [], "no documents required");
 
-    await buyer.api.json("/api/profile", "PATCH", { id_doc_type: "nid_paper" });
-    await buyer.api.upload("nid_paper", PNG, "p1.png", "image/png");
-    await buyer.api.json("/api/profile/identity", "PUT", {
-      document_number: "023-456-2130",
-    });
+    await buyer.api.json("/api/profile", "PATCH", { pin_code: "44600" });
 
     const { body } = await buyer.api.call("/api/profile");
     expect(body.ready, true, "ready");
+  });
+
+  await check("a buyer is approved right away on submit, no AI check", async () => {
+    const { status, body } = await buyer.api.call("/api/profile/submit", {
+      method: "POST",
+    });
+    expect(status, 200, "status");
+    expect(body.decision, "approve", "decision");
+    expect(body.profile.status, "approved", "status");
   });
 
   // -------------------------------------------------------------------------
   console.log("\nOne user cannot touch another");
 
   await check("a user cannot delete someone else's document", async () => {
-    const mine = await buyer.api.call("/api/profile/documents");
-    const { status } = await supplier.api.call(
+    const mine = await supplier.api.call("/api/profile/documents");
+    const { status } = await buyer.api.call(
       `/api/profile/documents/${mine.body.documents[0].id}`,
       { method: "DELETE" },
     );
@@ -931,14 +942,14 @@ async function main() {
   });
 
   await check("a document can be deleted by its owner", async () => {
-    const list = await buyer.api.call("/api/profile/documents");
+    const list = await supplier.api.call("/api/profile/documents");
     const doc = list.body.documents[0];
-    const { status } = await buyer.api.call(`/api/profile/documents/${doc.id}`, {
+    const { status } = await supplier.api.call(`/api/profile/documents/${doc.id}`, {
       method: "DELETE",
     });
     expect(status, 200, "status");
 
-    const after = await buyer.api.call("/api/profile");
+    const after = await supplier.api.call("/api/profile");
     expectHas(after.body.missing.documents, doc.doc_type, "missing again");
   });
 

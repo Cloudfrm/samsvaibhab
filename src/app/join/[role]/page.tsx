@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
+import { homeFor } from "@/lib/profile";
 import { createClient } from "@/utils/supabase/server";
 import { Markdown } from "@/components/Markdown";
 import { JoinForm } from "@/components/JoinForm";
@@ -29,7 +30,7 @@ export default async function JoinPage({
 
   // Already signed up: finish the details instead of signing up again.
   const profile = await getCurrentProfile();
-  if (profile) redirect(profile.status === "incomplete" ? "/onboarding" : "/account");
+  if (profile) redirect(homeFor(profile));
 
   const copy = COPY[role];
   const supabase = await createClient();
