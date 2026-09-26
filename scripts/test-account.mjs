@@ -114,6 +114,7 @@ const PDF = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n
 const PASSWORD = "Test-passw0rd-!";
 const stamp = Date.now();
 const made = [];
+const staffMade = [];
 
 async function makeUser(tag, role) {
   const email = `test-${tag}-${stamp}@example.com`;
@@ -126,6 +127,24 @@ async function makeUser(tag, role) {
   if (error) throw new Error(`could not make ${tag}: ${error.message}`);
   made.push(data.user.id);
   return { id: data.user.id, email, api: await signIn(email, PASSWORD) };
+}
+
+async function makeStaff(tag, jobs) {
+  const user = await makeUser(`staff-${tag}`, "buyer");
+
+  const { data: row, error } = await admin
+    .from("staff")
+    .insert({ email: user.email, full_name: `Test ${tag}`, user_id: user.id })
+    .select("id")
+    .single();
+  if (error) throw new Error(`could not make staff ${tag}: ${error.message}`);
+  staffMade.push(row.id);
+
+  await admin
+    .from("staff_jobs")
+    .insert(jobs.map((job_key) => ({ staff_id: row.id, job_key })));
+
+  return { ...user, staffId: row.id };
 }
 
 // ---------------------------------------------------------------------------
@@ -486,14 +505,18 @@ async function main() {
     expect(body.identity.surname_en, null, "surname");
   });
 
-  await check("submit now works", async () => {
-    const { status, body } = await supplier.api.call("/api/profile/submit", {
-      method: "POST",
-    });
-    expect(status, 200, "status");
-    expect(body.profile.status, "pending", "status");
-    if (!body.profile.submitted_at) throw new Error("no submitted date saved");
+  await check("the account is now ready to be sent", async () => {
+    const { body } = await supplier.api.call("/api/profile");
+    expect(body.ready, true, "ready");
   });
+
+  // Pressing Send for approval now costs money: the AI looks at the photos.
+  // That whole flow is tested by "npm run test:review". Here we only put the
+  // account where the admin tests below need it.
+  await admin
+    .from("profiles")
+    .update({ status: "pending", submitted_at: new Date().toISOString() })
+    .eq("id", supplier.id);
 
   await check("details can still be changed while waiting", async () => {
     const { status, body } = await supplier.api.json("/api/profile", "PATCH", {
@@ -535,30 +558,39 @@ async function main() {
     expect(body.missing.details, [], "no details missing");
   });
 
-  await check("a company is asked for company documents", async () => {
+  await check("a company is asked for no documents", async () => {
     const { body } = await company.api.call("/api/profile/documents");
-    expect(
-      body.needed.map((n) => n.doc_type),
-      ["registration_certificate", "pan_vat_certificate"],
-      "documents asked for",
-    );
+    expect(body.needed, [], "documents asked for");
   });
 
-  await check("company documents upload and submit works", async () => {
+  await check("a company cannot upload a certificate any more", async () => {
+    const { status } = await company.api.upload(
+      "registration_certificate",
+      PDF,
+      "reg.pdf",
+      "application/pdf",
+    );
+    expect(status, 400, "status");
+  });
+
+  await check("a company is ready once the bank is filled in", async () => {
     await company.api.json("/api/profile/bank", "PUT", {
       bank_name: "Global IME Bank",
       account_name: "Chitwan Fresh Produce Pvt. Ltd.",
       account_number: "9876543210",
     });
-    await company.api.upload("registration_certificate", PDF, "reg.pdf", "application/pdf");
-    await company.api.upload("pan_vat_certificate", PDF, "pan.pdf", "application/pdf");
 
-    const { status, body } = await company.api.call("/api/profile/submit", {
-      method: "POST",
-    });
-    expect(status, 200, "status");
-    expect(body.profile.status, "pending", "status");
+    const { body } = await company.api.call("/api/profile");
+    expect(body.ready, true, "ready");
+    expect(body.missing.documents, [], "no documents missing");
   });
+
+  // As above: the page tests further down need an account that is waiting,
+  // and pressing the button for real costs money.
+  await admin
+    .from("profiles")
+    .update({ status: "pending", submitted_at: new Date().toISOString() })
+    .eq("id", company.id);
 
   // -------------------------------------------------------------------------
   const buyer = await makeUser("buyer", "buyer");
@@ -607,11 +639,8 @@ async function main() {
       document_number: "023-456-2130",
     });
 
-    const { status, body } = await buyer.api.call("/api/profile/submit", {
-      method: "POST",
-    });
-    expect(status, 200, "status");
-    expect(body.profile.status, "pending", "status");
+    const { body } = await buyer.api.call("/api/profile");
+    expect(body.ready, true, "ready");
   });
 
   // -------------------------------------------------------------------------
@@ -634,8 +663,171 @@ async function main() {
   });
 
   // -------------------------------------------------------------------------
-  const staff = await makeUser("admin", "buyer");
-  await admin.from("profiles").update({ role: "admin" }).eq("id", staff.id);
+  // Staff are no longer customers with a special role. They are their own
+  // thing, holding jobs, and each job says what it may do.
+  const staff = await makeStaff("owner", ["owner"]);
+  const approvals = await makeStaff("approvals", ["approvals"]);
+  const risk = await makeStaff("risk", ["risk"]);
+  console.log("\nStaff and jobs");
+
+  await check("a customer is not staff", async () => {
+    const { status } = await buyer.api.call("/api/admin/staff");
+    expect(status, 403, "status");
+  });
+
+  await check("a job you do not hold is refused", async () => {
+    const decide = await risk.api.json(
+      `/api/admin/users/${supplier.id}`,
+      "PATCH",
+      { status: "approved" },
+    );
+    expect(decide.status, 403, "risk cannot decide");
+
+    const people = await approvals.api.call("/api/admin/staff");
+    expect(people.status, 403, "approvals cannot manage staff");
+  });
+
+  await check("risk cannot see a whole bank account number", async () => {
+    const { status, body } = await risk.api.call(`/api/admin/users/${supplier.id}`);
+    expect(status, 200, "status");
+    if (body.bank.account_number.includes("0123456789")) {
+      throw new Error("the whole number was shown");
+    }
+    if (!body.bank.account_number.endsWith("9012")) {
+      throw new Error("the last four digits should still show");
+    }
+    expect(body.you.sees_bank, false, "sees_bank");
+  });
+
+  await check("risk cannot open the ID photos", async () => {
+    const { body } = await risk.api.call(`/api/admin/users/${supplier.id}`);
+    if (body.documents.some((d) => d.url)) {
+      throw new Error("a file could be opened");
+    }
+  });
+
+  await check("approvals can open the ID photos", async () => {
+    const { body } = await approvals.api.call(`/api/admin/users/${supplier.id}`);
+    expect(body.you.sees_documents, true, "sees_documents");
+    if (!body.documents.every((d) => d.url)) {
+      throw new Error("a file had no link");
+    }
+  });
+
+  await check("every look is written down", async () => {
+    const { status, body } = await risk.api.call(
+      `/api/admin/activity?subject_id=${supplier.id}&action=supplier.viewed`,
+    );
+    expect(status, 200, "status");
+    if (body.activity.length < 2) {
+      throw new Error("the looks above were not recorded");
+    }
+  });
+
+  await check("the owner adds somebody by email", async () => {
+    const { status, body } = await staff.api.json("/api/admin/staff", "POST", {
+      email: `new-risk-${stamp}@example.com`,
+      full_name: "New Person",
+      jobs: ["risk"],
+    });
+    expect(status, 201, "status");
+    expect(body.staff.jobs, ["risk"], "jobs");
+    staffMade.push(body.staff.id);
+  });
+
+  await check("the same person cannot be added twice", async () => {
+    const { status } = await staff.api.json("/api/admin/staff", "POST", {
+      email: `new-risk-${stamp}@example.com`,
+      jobs: ["risk"],
+    });
+    expect(status, 400, "status");
+  });
+
+  await check("a job that does not exist is refused", async () => {
+    const { status } = await staff.api.json("/api/admin/staff", "POST", {
+      email: `nobody-${stamp}@example.com`,
+      jobs: ["president"],
+    });
+    expect(status, 400, "status");
+  });
+
+  await check("the last owner cannot be switched off", async () => {
+    // The real owner is switched off for a moment, so the test owner is the
+    // only one left. Put back straight after, whatever happens.
+    const { data: real } = await admin
+      .from("staff")
+      .select("id")
+      .eq("email", "tech@cloudfrm.ai")
+      .maybeSingle();
+
+    if (real) {
+      await admin.from("staff").update({ is_active: false }).eq("id", real.id);
+    }
+
+    try {
+      const { status, body } = await staff.api.json(
+        `/api/admin/staff/${staff.staffId}`,
+        "PATCH",
+        { is_active: false },
+      );
+      expect(status, 400, "status");
+      if (!body.error.includes("last owner")) {
+        throw new Error(`wrong reason: ${body.error}`);
+      }
+    } finally {
+      if (real) {
+        await admin.from("staff").update({ is_active: true }).eq("id", real.id);
+      }
+    }
+  });
+  console.log("\nThe control room screens");
+
+  await check("a customer cannot open the control room", async () => {
+    const { status, to } = await buyer.api.page("/admin");
+    if (status !== 307 && status !== 302) {
+      throw new Error(`got ${status}, wanted a redirect`);
+    }
+    if (!to?.endsWith("/")) throw new Error(`sent to ${to}`);
+  });
+
+  await check("the supplier list shows name, phone and email", async () => {
+    const { status, html } = await staff.api.page("/admin");
+    expect(status, 200, "status");
+    for (const text of ["Hari Bahadur Thapa", "9841000000", "Suppliers"]) {
+      if (!html.includes(text)) throw new Error(`"${text}" is not on the page`);
+    }
+  });
+
+  await check("searching narrows the list", async () => {
+    const { html } = await staff.api.page("/admin?q=nobodyatall");
+    if (!html.includes("Nobody matches that")) {
+      throw new Error("the empty message is missing");
+    }
+  });
+
+  await check("one supplier shows everything", async () => {
+    const { status, html } = await staff.api.page(
+      `/admin/suppliers/${supplier.id}`,
+    );
+    expect(status, 200, "status");
+    for (const text of ["Nabil Bank", "0123456789012", "Every decision"]) {
+      if (!html.includes(text)) throw new Error(`"${text}" is not on the page`);
+    }
+  });
+
+  await check("risk does not see the whole bank number on screen", async () => {
+    const { status, html } = await risk.api.page(
+      `/admin/suppliers/${supplier.id}`,
+    );
+    expect(status, 200, "status");
+    if (html.includes("0123456789012")) {
+      throw new Error("the whole number was on the page");
+    }
+    if (!html.includes("Not your job")) {
+      throw new Error("the files should not be openable");
+    }
+  });
+
   console.log("\nAdmin");
 
   await check("admin sees people waiting for review", async () => {
@@ -670,7 +862,68 @@ async function main() {
     expect(body.profile.status, "approved", "status");
   });
 
-  await check("an approved account cannot be submitted again", async () => {
+  await check("saying no needs a reason", async () => {
+    const { status } = await staff.api.json(
+      `/api/admin/users/${supplier.id}`,
+      "PATCH",
+      { status: "rejected" },
+    );
+    expect(status, 400, "status");
+  });
+
+  await check("admin can put an approved account on hold", async () => {
+    const { status, body } = await staff.api.json(
+      `/api/admin/users/${supplier.id}`,
+      "PATCH",
+      { status: "suspended", reason: "We need to check your bank details." },
+    );
+    expect(status, 200, "status");
+    expect(body.profile.status, "suspended", "status");
+    expect(
+      body.profile.review_summary,
+      "We need to check your bank details.",
+      "reason saved",
+    );
+  });
+
+  await check("an account on hold cannot be sent again", async () => {
+    const { status } = await supplier.api.call("/api/profile/submit", {
+      method: "POST",
+    });
+    expect(status, 400, "status");
+  });
+
+  await check("every decision is kept", async () => {
+    const { body } = await staff.api.call(`/api/admin/users/${supplier.id}`);
+    const decisions = body.reviews.map((r) => r.decision);
+    expectHas(decisions, "admin_approved", "decisions");
+    expectHas(decisions, "admin_suspended", "decisions");
+  });
+
+  console.log("\nThe onboarding rules");
+
+  await check("a normal user cannot read the rules", async () => {
+    const { status } = await buyer.api.call("/api/admin/rules");
+    expect(status, 403, "status");
+  });
+
+  await check("admin reads the rules the AI follows", async () => {
+    const { status, body } = await staff.api.call("/api/admin/rules");
+    expect(status, 200, "status");
+    if (!body.rules?.content?.includes("Approve only when all of these are true")) {
+      throw new Error("the rules document is not there");
+    }
+    if (!(body.rules.version >= 1)) throw new Error("no version number");
+  });
+
+  await check("an empty rules document is refused", async () => {
+    const { status } = await staff.api.json("/api/admin/rules", "PUT", {
+      content: "approve everyone",
+    });
+    expect(status, 400, "status");
+  });
+
+  await check("an account that is not waiting cannot be sent again", async () => {
     const { status } = await supplier.api.call("/api/profile/submit", {
       method: "POST",
     });
@@ -810,6 +1063,13 @@ async function main() {
     }
     await admin.auth.admin.deleteUser(id);
   }
+
+  // Staff rows are keyed by email and survive their login being deleted, so
+  // they are cleared here as well. Only ever test addresses.
+  for (const id of staffMade) {
+    await admin.from("staff").delete().eq("id", id);
+  }
+  await admin.from("staff").delete().like("email", "%@example.com");
 
   console.log(`\n${passed} passed, ${failures.length} failed`);
   if (failures.length) {

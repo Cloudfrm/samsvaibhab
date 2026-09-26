@@ -1,20 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/utils/supabase/server";
-import { getCurrentProfile } from "@/lib/auth";
+import { createAdminClient } from "@/utils/supabase/admin";
+import { record, requireStaff } from "@/lib/staff";
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const profile = await getCurrentProfile();
-
-  if (profile?.role !== "admin") {
-    return NextResponse.json({ error: "Admins only" }, { status: 403 });
-  }
+  const { staff, error: refused, status } = await requireStaff("pages.edit");
+  if (!staff) return NextResponse.json({ error: refused }, { status });
 
   const { slug } = await params;
   const { title, content, is_published } = await request.json();
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data: existing } = await supabase
     .from("pages")
@@ -25,7 +22,7 @@ export async function PUT(
   if (!existing) {
     const { data, error } = await supabase
       .from("pages")
-      .insert({ slug, title, content, updated_by: profile.id })
+      .insert({ slug, title, content })
       .select("*")
       .single();
 
@@ -42,7 +39,6 @@ export async function PUT(
       ...(is_published === undefined ? {} : { is_published }),
       version: existing.version + 1,
       updated_at: new Date().toISOString(),
-      updated_by: profile.id,
     })
     .eq("slug", slug)
     .select("*")
@@ -51,6 +47,8 @@ export async function PUT(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
+
+  await record(staff.id, "page.updated", null, { slug });
 
   return NextResponse.json({ page: data });
 }

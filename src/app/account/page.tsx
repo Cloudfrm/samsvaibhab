@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
+import { currentStaff } from "@/lib/staff";
 import { loadAccount } from "@/lib/profile";
 import { LogoutButton } from "@/components/LogoutButton";
 
@@ -16,6 +17,10 @@ const STATUS_COPY = {
   rejected: {
     title: "Your account was not approved",
     body: "Please check your details and send them again, or contact us if you think this is a mistake.",
+  },
+  suspended: {
+    title: "Your account is on hold",
+    body: "Please get in touch with us so we can sort this out.",
   },
 } as const;
 
@@ -37,6 +42,9 @@ export default async function AccountPage() {
       </main>
     );
   }
+
+  // Somebody who works here belongs in the control room.
+  if (await currentStaff()) redirect("/admin");
 
   // Details are not finished, so there is nothing to show yet.
   if (profile.status === "incomplete") redirect("/onboarding");
@@ -61,7 +69,7 @@ export default async function AccountPage() {
       <div className="mt-8 rounded-lg border border-hairline bg-canvas-soft p-6">
         <h2 className="text-[18px] font-medium">{status.title}</h2>
         <p className="mt-2 text-[14px] leading-[1.6] text-ink-mute">
-          {status.body}
+          {profile.review_summary ?? status.body}
         </p>
         <Link
           href="/onboarding"

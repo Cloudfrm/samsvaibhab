@@ -33,3 +33,36 @@ body {
   letter-spacing: -0.03em;
   line-height: 1.1;
 }
+
+/* ---------------------------------------------------------------------------
+   The control room.
+
+   A different look from the supplier site on purpose: warm cream paper, near
+   black ink, one hot orange kept for the thing that matters most, and fully
+   rounded controls. Taken from replicate/DESIGN.md.
+
+   Its own `adm-` tokens, so nothing here can change the supplier screens.
+   The design calls for rb-freigeist-neue and basier-square, which we do not
+   have a licence for, so the same weights are carried by Inter.
+--------------------------------------------------------------------------- */
+
+@theme {
+  --color-adm-canvas: #f9f7f3;
+  --color-adm-bone: #f3f0e8;
+  --color-adm-card: #ffffff;
+  --color-adm-dark: #202020;
+  --color-adm-ink: #202020;
+  --color-adm-body: #3a3a3a;
+  --color-adm-mute: #646464;
+  --color-adm-ash: #8d8d8d;
+  --color-adm-line: rgba(32, 32, 32, 0.12);
+  --color-adm-orange: #ea2804;
+  --color-adm-orange-deep: #c01f00;
+  --color-adm-green: #2b9a66;
+}
+
+.adm-display {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}

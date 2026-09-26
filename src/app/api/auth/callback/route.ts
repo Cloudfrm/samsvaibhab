@@ -62,7 +62,17 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const response = NextResponse.redirect(new URL("/account", request.nextUrl.origin));
+  // Somebody who works here goes to the control room, not to a customer page.
+  const { data: staff } = await admin
+    .from("staff")
+    .select("id")
+    .eq("email", (data.user.email ?? "").toLowerCase())
+    .eq("is_active", true)
+    .maybeSingle();
+
+  const response = NextResponse.redirect(
+    new URL(staff ? "/admin" : "/account", request.nextUrl.origin),
+  );
   response.cookies.delete("sv_signup_role");
   response.cookies.delete("sv_accepted_terms");
 

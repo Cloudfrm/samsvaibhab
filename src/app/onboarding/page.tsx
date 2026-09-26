@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
+import { currentStaff } from "@/lib/staff";
 import { createAdminClient } from "@/utils/supabase/admin";
 import {
   DOC_LABELS,
@@ -15,6 +16,7 @@ export default async function OnboardingPage() {
   const profile = await getCurrentProfile();
 
   if (!profile) redirect("/");
+  if (await currentStaff()) redirect("/admin");
 
   const admin = createAdminClient();
   const [account, { data: countries }, { data: districts }] = await Promise.all([

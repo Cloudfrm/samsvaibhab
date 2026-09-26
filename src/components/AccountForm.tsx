@@ -49,6 +49,8 @@ export function AccountForm({
   const [profile, setProfile] = useState(initialProfile);
   const [docs, setDocs] = useState(initialDocs);
   const [step, setStep] = useState(0);
+  // What the last check said, when the account was sent back to be fixed.
+  const [note, setNote] = useState(profile.review_summary ?? "");
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
 
@@ -94,23 +96,19 @@ export function AccountForm({
   const steps = useMemo(() => {
     const list = ["who", "where"];
     if (isSupplier) list.push("bank");
-    // A person picks an ID document and then checks what we read off it. A
-    // company just uploads its papers; nothing is read from those.
-    const docSteps = isCompany
-      ? ["documents"]
-      : ["document", "documents", "identity"];
+    // A person picks an ID document, uploads it, and checks what we read off
+    // it. A company uploads nothing at sign-up.
+    const docSteps = isCompany ? [] : ["document", "documents", "identity"];
     return [...(profile.role ? [] : ["role"]), ...list, ...docSteps, "review"];
   }, [isCompany, isSupplier, profile.role]);
 
   const current = steps[step];
-  // Company files are fixed. An individual's files depend on which ID
-  // document they picked in step 4, so there is nothing to ask for until then.
+  // An individual's files depend on which ID document they picked, so there
+  // is nothing to ask for until then. A company is asked for nothing at all.
   const needed =
-    form.account_type === "company"
-      ? requiredDocs.company
-      : form.id_doc_type
-        ? requiredDocs[form.id_doc_type]
-        : [];
+    form.account_type === "company" || !form.id_doc_type
+      ? []
+      : requiredDocs[form.id_doc_type];
 
   // --- step 5: read the photos, once, when the screen opens -----------------
 
@@ -354,8 +352,17 @@ export function AccountForm({
         ...(body.missing?.identity ?? []),
       ];
       return setErrors({
-        _: `Still missing: ${all.map((f) => LABELS[f] ?? f).join(", ")}`,
+        _: all.length
+          ? `Still missing: ${all.map((f) => LABELS[f] ?? f).join(", ")}`
+          : body.error,
       });
+    }
+
+    // The check runs there and then. Sent back means they stay here and fix
+    // it, so the note has to be on this screen.
+    if (body.decision === "send_back") {
+      setNote(body.summary);
+      return setErrors({ _: "" });
     }
 
     router.push("/account");
@@ -693,6 +700,11 @@ export function AccountForm({
 
       {current === "review" && (
         <Screen title="Check your details" sub="Make sure this is right before you send it.">
+          {note && (
+            <p className="mb-6 whitespace-pre-line rounded-sm border border-hairline bg-canvas-soft p-4 text-[14px] leading-[1.6]">
+              {note}
+            </p>
+          )}
           <dl className="divide-y divide-hairline-cool border-y border-hairline-cool text-[14px]">
             <Row label="Account type" value={form.account_type} />
             {isCompany ? (
@@ -807,8 +819,6 @@ const LABELS: Record<string, string> = {
   nid_card_front: "national ID card front",
   nid_card_back: "national ID card back",
   nid_paper: "national ID paper document",
-  registration_certificate: "registration certificate",
-  pan_vat_certificate: "PAN or VAT certificate",
 };
 
 const inputClass = (error?: string) =>

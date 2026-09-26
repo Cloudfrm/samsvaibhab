@@ -4,7 +4,7 @@ export type Profile = {
   id: string;
   role: "supplier" | "buyer" | "admin" | null;
   account_type: "individual" | "company" | null;
-  status: "incomplete" | "pending" | "approved" | "rejected";
+  status: "incomplete" | "pending" | "approved" | "rejected" | "suspended";
   email: string | null;
   full_name: string | null;
   company_name: string | null;
@@ -18,6 +18,9 @@ export type Profile = {
   district: string | null;
   city: string | null;
   submitted_at: string | null;
+  reviewed_at: string | null;
+  review_summary: string | null;
+  send_back_count: number;
   details: Record<string, unknown>;
 };
 
@@ -34,11 +37,6 @@ export async function getCurrentProfile() {
     .single();
 
   return profile as Profile | null;
-}
-
-export async function isAdmin() {
-  const profile = await getCurrentProfile();
-  return profile?.role === "admin";
 }
 
 type AdminClient = ReturnType<typeof import("@/utils/supabase/admin").createAdminClient>;
