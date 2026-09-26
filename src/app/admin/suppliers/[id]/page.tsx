@@ -62,7 +62,7 @@ export default async function SupplierPage(
   return (
     <>
       <Link
-        href="/admin"
+        href="/admin/suppliers"
         className="text-[14px] text-adm-mute underline-offset-4 hover:text-adm-ink hover:underline"
       >
         ← All suppliers
