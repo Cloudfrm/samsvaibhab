@@ -293,3 +293,71 @@ fill-up that comes after approval.
 
 Still to do: the four emails, once the Resend key is in. The spots are marked
 `TODO email` in the code.
+
+---
+
+## Idea 3 — Staff jobs and permissions, then the supplier list
+
+Status: **agreed, not built. Waiting for the go.**
+
+No product catalogue yet, and no buyer onboarding yet, so we build only what
+already exists: suppliers.
+
+### Why permissions come first
+
+Permissions are hard to change later, because every endpoint checks them.
+A transport table added in six months touches nothing. A change to who is
+allowed to see what touches every file. So the walls go up before the rooms.
+
+Today one person has one `role`: supplier, buyer or admin. That mixes two
+different things — **what kind of customer you are** and **what your job here
+is**. A risk analyst is not a customer type. And `admin` means "can do
+everything", so there is no way to say "Sita sees risk but not bank accounts".
+
+### The jobs, to start with
+
+| Job | What it is for |
+|---|---|
+| **Owner** | You. Everything. The only one who can add or remove staff. There is always at least one. |
+| **Approvals** | Supplier accounts. Sees the ID photos, because judging them is the job. |
+| **Risk** | Looks at accounts and decision history. Does not see full bank numbers — last 4 digits only. |
+
+More jobs — accounts, transport, insurance — are added to the list later with
+no code change.
+
+### Sensitive details
+
+Only the jobs that need them:
+
+- the **ID photos**: Approvals and Owner
+- the **full bank account number**: Owner only for now, and Accounts when that
+  job is added. Everyone else sees the last 4 digits.
+- **every look at a document or a bank number is written down.**
+
+### Adding staff
+
+You add them by email and pick their jobs. They log in with that email and
+land in the control room.
+
+### The supplier screen
+
+Two screens, plain, no design pass.
+
+1. **The list** — name, phone number, email. Nothing more.
+2. **Click one, see everything** — all their details, bank, documents, and
+   every decision the AI made on them, with the reason.
+
+**Look only. No buttons yet.** Approve, reject and suspend already work in the
+backend. The buttons go on the screen later, once you have seen the data and
+know what you want.
+
+### Order of work
+
+1. Backend: staff, jobs, one permission check used everywhere, activity log.
+2. Test it fully.
+3. Frontend: the list screen and the detail screen, behind those permissions.
+
+### Not in this step
+
+The product catalogue. Buyer onboarding. The chatbot. Transport, risk scoring,
+insurance, routes, purchase orders.
