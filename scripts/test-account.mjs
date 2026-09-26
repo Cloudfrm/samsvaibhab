@@ -114,6 +114,7 @@ const PDF = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n
 const PASSWORD = "Test-passw0rd-!";
 const stamp = Date.now();
 const made = [];
+const staffMade = [];
 
 async function makeUser(tag, role) {
   const email = `test-${tag}-${stamp}@example.com`;
@@ -126,6 +127,24 @@ async function makeUser(tag, role) {
   if (error) throw new Error(`could not make ${tag}: ${error.message}`);
   made.push(data.user.id);
   return { id: data.user.id, email, api: await signIn(email, PASSWORD) };
+}
+
+async function makeStaff(tag, jobs) {
+  const user = await makeUser(`staff-${tag}`, "buyer");
+
+  const { data: row, error } = await admin
+    .from("staff")
+    .insert({ email: user.email, full_name: `Test ${tag}`, user_id: user.id })
+    .select("id")
+    .single();
+  if (error) throw new Error(`could not make staff ${tag}: ${error.message}`);
+  staffMade.push(row.id);
+
+  await admin
+    .from("staff_jobs")
+    .insert(jobs.map((job_key) => ({ staff_id: row.id, job_key })));
+
+  return { ...user, staffId: row.id };
 }
 
 // ---------------------------------------------------------------------------
@@ -644,8 +663,123 @@ async function main() {
   });
 
   // -------------------------------------------------------------------------
-  const staff = await makeUser("admin", "buyer");
-  await admin.from("profiles").update({ role: "admin" }).eq("id", staff.id);
+  // Staff are no longer customers with a special role. They are their own
+  // thing, holding jobs, and each job says what it may do.
+  const staff = await makeStaff("owner", ["owner"]);
+  const approvals = await makeStaff("approvals", ["approvals"]);
+  const risk = await makeStaff("risk", ["risk"]);
+  console.log("\nStaff and jobs");
+
+  await check("a customer is not staff", async () => {
+    const { status } = await buyer.api.call("/api/admin/staff");
+    expect(status, 403, "status");
+  });
+
+  await check("a job you do not hold is refused", async () => {
+    const decide = await risk.api.json(
+      `/api/admin/users/${supplier.id}`,
+      "PATCH",
+      { status: "approved" },
+    );
+    expect(decide.status, 403, "risk cannot decide");
+
+    const people = await approvals.api.call("/api/admin/staff");
+    expect(people.status, 403, "approvals cannot manage staff");
+  });
+
+  await check("risk cannot see a whole bank account number", async () => {
+    const { status, body } = await risk.api.call(`/api/admin/users/${supplier.id}`);
+    expect(status, 200, "status");
+    if (body.bank.account_number.includes("0123456789")) {
+      throw new Error("the whole number was shown");
+    }
+    if (!body.bank.account_number.endsWith("9012")) {
+      throw new Error("the last four digits should still show");
+    }
+    expect(body.you.sees_bank, false, "sees_bank");
+  });
+
+  await check("risk cannot open the ID photos", async () => {
+    const { body } = await risk.api.call(`/api/admin/users/${supplier.id}`);
+    if (body.documents.some((d) => d.url)) {
+      throw new Error("a file could be opened");
+    }
+  });
+
+  await check("approvals can open the ID photos", async () => {
+    const { body } = await approvals.api.call(`/api/admin/users/${supplier.id}`);
+    expect(body.you.sees_documents, true, "sees_documents");
+    if (!body.documents.every((d) => d.url)) {
+      throw new Error("a file had no link");
+    }
+  });
+
+  await check("every look is written down", async () => {
+    const { status, body } = await risk.api.call(
+      `/api/admin/activity?subject_id=${supplier.id}&action=supplier.viewed`,
+    );
+    expect(status, 200, "status");
+    if (body.activity.length < 2) {
+      throw new Error("the looks above were not recorded");
+    }
+  });
+
+  await check("the owner adds somebody by email", async () => {
+    const { status, body } = await staff.api.json("/api/admin/staff", "POST", {
+      email: `new-risk-${stamp}@example.com`,
+      full_name: "New Person",
+      jobs: ["risk"],
+    });
+    expect(status, 201, "status");
+    expect(body.staff.jobs, ["risk"], "jobs");
+    staffMade.push(body.staff.id);
+  });
+
+  await check("the same person cannot be added twice", async () => {
+    const { status } = await staff.api.json("/api/admin/staff", "POST", {
+      email: `new-risk-${stamp}@example.com`,
+      jobs: ["risk"],
+    });
+    expect(status, 400, "status");
+  });
+
+  await check("a job that does not exist is refused", async () => {
+    const { status } = await staff.api.json("/api/admin/staff", "POST", {
+      email: `nobody-${stamp}@example.com`,
+      jobs: ["president"],
+    });
+    expect(status, 400, "status");
+  });
+
+  await check("the last owner cannot be switched off", async () => {
+    // The real owner is switched off for a moment, so the test owner is the
+    // only one left. Put back straight after, whatever happens.
+    const { data: real } = await admin
+      .from("staff")
+      .select("id")
+      .eq("email", "tech@cloudfrm.ai")
+      .maybeSingle();
+
+    if (real) {
+      await admin.from("staff").update({ is_active: false }).eq("id", real.id);
+    }
+
+    try {
+      const { status, body } = await staff.api.json(
+        `/api/admin/staff/${staff.staffId}`,
+        "PATCH",
+        { is_active: false },
+      );
+      expect(status, 400, "status");
+      if (!body.error.includes("last owner")) {
+        throw new Error(`wrong reason: ${body.error}`);
+      }
+    } finally {
+      if (real) {
+        await admin.from("staff").update({ is_active: true }).eq("id", real.id);
+      }
+    }
+  });
   console.log("\nAdmin");
 
   await check("admin sees people waiting for review", async () => {

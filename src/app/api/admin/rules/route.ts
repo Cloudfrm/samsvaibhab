@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentProfile } from "@/lib/auth";
 import { currentRules, saveRules } from "@/lib/onboarding-rules";
+import { record, requireStaff } from "@/lib/staff";
 
 /**
  * The onboarding rules the AI follows. GET reads the current version, PUT
@@ -8,21 +8,15 @@ import { currentRules, saveRules } from "@/lib/onboarding-rules";
  */
 
 export async function GET() {
-  const profile = await getCurrentProfile();
-
-  if (profile?.role !== "admin") {
-    return NextResponse.json({ error: "Admins only" }, { status: 403 });
-  }
+  const { staff, error, status } = await requireStaff("rules.read");
+  if (!staff) return NextResponse.json({ error }, { status });
 
   return NextResponse.json({ rules: await currentRules() });
 }
 
 export async function PUT(request: NextRequest) {
-  const profile = await getCurrentProfile();
-
-  if (profile?.role !== "admin") {
-    return NextResponse.json({ error: "Admins only" }, { status: 403 });
-  }
+  const { staff, error, status } = await requireStaff("rules.edit");
+  if (!staff) return NextResponse.json({ error }, { status });
 
   let body: { content?: unknown };
   try {
@@ -40,5 +34,8 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ rules: await saveRules(content, profile.id) });
+  const saved = await saveRules(content, null);
+  await record(staff.id, "rules.updated", null, { version: saved.version });
+
+  return NextResponse.json({ rules: saved });
 }

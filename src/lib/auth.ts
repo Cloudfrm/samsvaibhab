@@ -39,11 +39,6 @@ export async function getCurrentProfile() {
   return profile as Profile | null;
 }
 
-export async function isAdmin() {
-  const profile = await getCurrentProfile();
-  return profile?.role === "admin";
-}
-
 type AdminClient = ReturnType<typeof import("@/utils/supabase/admin").createAdminClient>;
 
 export async function recordTermsAcceptance(
