@@ -366,7 +366,7 @@ insurance, routes, purchase orders.
 
 ## Idea 4 — Buyer onboarding
 
-Status: **brainstorm only. Nothing agreed yet.**
+Status: **built and tested, backend and frontend.**
 
 ### The problem today
 
@@ -374,16 +374,21 @@ A buyer who logs in with an incomplete account gets sent to `/onboarding` —
 the same screens built for the supplier. That includes the ID document step,
 which a buyer should not see.
 
-### What we know so far
+### The plan as agreed
 
-Buyer needs its own onboarding, separate from the supplier one.
+**No approval, no ID document.** A buyer just fills in the form below and
+submits. Nothing to review, nothing to upload. Checking who they really are
+happens later, only when they create a purchase order — not part of this
+work.
 
-**ID document — not decided yet.** Do buyers need to prove who they are at
-all, like suppliers do? If yes, with what document? This needs an answer
-before we can plan the steps.
+**Individual or company, both can sign up as a buyer.**
 
-**Fields for the buyer form**, from the sample screen you shared. Not
-deciding the order or number of steps yet, just the fields:
+**Account is active right away**, the moment they submit. No pending status.
+
+**After they submit**, they land on a blank placeholder page. The real buyer
+dashboard is separate, later work.
+
+### Fields
 
 | Field | Required? |
 |---|---|
@@ -398,28 +403,27 @@ deciding the order or number of steps yet, just the fields:
 
 Preferred delivery mode — left out, not needed for now.
 
-### Decided: no buyer approval
+### Order of work
 
-A buyer does not need approval, and does not need to prove who they are at
-onboarding. Checking who they are happens later, when a purchase order is
-made — not now.
+1. Backend: fields above, buyer becomes active on submit, no review step.
+2. Fix the redirect so a buyer with an incomplete account goes to buyer
+   onboarding, not the supplier one.
+3. Test it.
+4. Frontend: one form screen with the fields above, then the blank
+   placeholder page.
 
-So buyer onboarding is just: fill the form above, submit, done. No pending
-screen, no admin review, no ID document.
+### Not in this idea
 
-### Decided: after onboarding, a blank page for now
+The real buyer dashboard. Checking who a buyer is (moves to purchase order
+time, later work). The ID document question — dropped, not needed.
 
-Once the buyer submits the form, they need somewhere to land. We have not
-built the buyer dashboard yet, so for now it is a blank placeholder page.
-The real buyer dashboard is a separate, later piece of work.
+### Built on 26 September 2026
 
-### Open questions, before we can finalize a plan
-
-1. Company accounts only, or can an individual sign up as a buyer too?
-2. Since there is no approval step, what does the buyer's account status say
-   right after they submit — is it just "active" straight away?
-
-### Not in this idea yet
-
-The onboarding step order. The real buyer dashboard (blank page stands in
-for it). Building anything.
+- Login and sign-up now send a buyer to their own onboarding, never the
+  supplier one. Fixed in three places: the home page, the join page, and the
+  account page.
+- One form screen with the fields above. Submit saves it and the account is
+  active straight away — no waiting screen, no AI check.
+- After submit, a blank placeholder page at `/buyer`. The real buyer
+  dashboard is separate work.
+- `npm run test:account` — 85 checks, free, all passing.

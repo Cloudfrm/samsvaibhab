@@ -50,6 +50,29 @@ export async function POST() {
     );
   }
 
+  // A buyer needs no approval and no ID check. Checking who they are happens
+  // later, when they make a purchase order.
+  if (profile.role === "buyer") {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("profiles")
+      .update({ status: "approved", submitted_at: new Date().toISOString() })
+      .eq("id", profile.id)
+      .select("*")
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    return NextResponse.json({
+      profile: data,
+      decision: "approve",
+      summary: "Your account is ready.",
+      issues: [],
+    });
+  }
+
   const rules = await currentRules();
 
   if (!rules) {

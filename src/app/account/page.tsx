@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { currentStaff } from "@/lib/staff";
-import { loadAccount } from "@/lib/profile";
+import { homeFor, loadAccount } from "@/lib/profile";
 import { LogoutButton } from "@/components/LogoutButton";
 
 const STATUS_COPY = {
@@ -45,6 +45,9 @@ export default async function AccountPage() {
 
   // Somebody who works here belongs in the control room.
   if (await currentStaff()) redirect("/admin");
+
+  // A buyer has its own onboarding and its own home screen.
+  if (profile.role === "buyer") redirect(homeFor(profile));
 
   // Details are not finished, so there is nothing to show yet.
   if (profile.status === "incomplete") redirect("/onboarding");

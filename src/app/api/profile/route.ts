@@ -21,6 +21,19 @@ const TEXT_FIELDS = [
   "pan_vat",
   "id_number",
   "city",
+  "delivery_location",
+  "state",
+  "pin_code",
+  "special_requirement",
+] as const;
+
+// These belong to the buyer form only.
+const BUYER_FIELDS = [
+  "city",
+  "delivery_location",
+  "state",
+  "pin_code",
+  "special_requirement",
 ] as const;
 
 const MAX_LENGTH = 200;
@@ -151,9 +164,11 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  if ("city" in body && role === "supplier") {
-    delete update.city;
-    errors.city = "City is only for buyers";
+  for (const field of BUYER_FIELDS) {
+    if (field in body && role === "supplier") {
+      delete update[field];
+      errors[field] = "This is only for buyers";
+    }
   }
 
   if (Object.keys(errors).length > 0) {

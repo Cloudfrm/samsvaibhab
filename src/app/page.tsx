@@ -2,12 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { getCurrentProfile } from "@/lib/auth";
+import { homeFor } from "@/lib/profile";
 
 export default async function Home() {
   const profile = await getCurrentProfile();
 
   // Someone already logged in has nothing to choose here.
-  if (profile) redirect(profile.status === "incomplete" ? "/onboarding" : "/account");
+  if (profile) redirect(homeFor(profile));
 
   return (
     <>

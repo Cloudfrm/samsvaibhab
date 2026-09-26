@@ -102,6 +102,17 @@ export function missingFromProfile(profile: Profile): string[] {
     typeof value === "string" && value.trim().length > 0;
 
   if (!profile.role) missing.push("role");
+
+  // A buyer needs no approval and no ID document, so the form is just these
+  // fields, individual or company alike.
+  if (profile.role === "buyer") {
+    if (!has(profile.full_name)) missing.push("full_name");
+    if (!has(profile.company_name)) missing.push("company_name");
+    if (!has(profile.phone)) missing.push("phone");
+    if (!has(profile.pin_code)) missing.push("pin_code");
+    return missing;
+  }
+
   if (!profile.account_type) return [...missing, "account_type"];
 
   if (profile.account_type === "individual") {
@@ -179,6 +190,14 @@ export function whatIsMissing(
     documents,
     identity,
   };
+}
+
+/** Where a logged-in user lands: their onboarding, or their home screen. */
+export function homeFor(profile: Pick<Profile, "role" | "status">): string {
+  if (profile.status === "incomplete") {
+    return profile.role === "buyer" ? "/onboarding/buyer" : "/onboarding";
+  }
+  return profile.role === "buyer" ? "/buyer" : "/account";
 }
 
 export function isReadyToSubmit(missing: ReturnType<typeof whatIsMissing>) {
