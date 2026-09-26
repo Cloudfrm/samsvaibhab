@@ -780,6 +780,54 @@ async function main() {
       }
     }
   });
+  console.log("\nThe control room screens");
+
+  await check("a customer cannot open the control room", async () => {
+    const { status, to } = await buyer.api.page("/admin");
+    if (status !== 307 && status !== 302) {
+      throw new Error(`got ${status}, wanted a redirect`);
+    }
+    if (!to?.endsWith("/")) throw new Error(`sent to ${to}`);
+  });
+
+  await check("the supplier list shows name, phone and email", async () => {
+    const { status, html } = await staff.api.page("/admin");
+    expect(status, 200, "status");
+    for (const text of ["Hari Bahadur Thapa", "9841000000", "Suppliers"]) {
+      if (!html.includes(text)) throw new Error(`"${text}" is not on the page`);
+    }
+  });
+
+  await check("searching narrows the list", async () => {
+    const { html } = await staff.api.page("/admin?q=nobodyatall");
+    if (!html.includes("Nobody matches that")) {
+      throw new Error("the empty message is missing");
+    }
+  });
+
+  await check("one supplier shows everything", async () => {
+    const { status, html } = await staff.api.page(
+      `/admin/suppliers/${supplier.id}`,
+    );
+    expect(status, 200, "status");
+    for (const text of ["Nabil Bank", "0123456789012", "Every decision"]) {
+      if (!html.includes(text)) throw new Error(`"${text}" is not on the page`);
+    }
+  });
+
+  await check("risk does not see the whole bank number on screen", async () => {
+    const { status, html } = await risk.api.page(
+      `/admin/suppliers/${supplier.id}`,
+    );
+    expect(status, 200, "status");
+    if (html.includes("0123456789012")) {
+      throw new Error("the whole number was on the page");
+    }
+    if (!html.includes("Not your job")) {
+      throw new Error("the files should not be openable");
+    }
+  });
+
   console.log("\nAdmin");
 
   await check("admin sees people waiting for review", async () => {
@@ -1015,6 +1063,13 @@ async function main() {
     }
     await admin.auth.admin.deleteUser(id);
   }
+
+  // Staff rows are keyed by email and survive their login being deleted, so
+  // they are cleared here as well. Only ever test addresses.
+  for (const id of staffMade) {
+    await admin.from("staff").delete().eq("id", id);
+  }
+  await admin.from("staff").delete().like("email", "%@example.com");
 
   console.log(`\n${passed} passed, ${failures.length} failed`);
   if (failures.length) {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
+import { currentStaff } from "@/lib/staff";
 import { loadAccount } from "@/lib/profile";
 import { LogoutButton } from "@/components/LogoutButton";
 
@@ -41,6 +42,9 @@ export default async function AccountPage() {
       </main>
     );
   }
+
+  // Somebody who works here belongs in the control room.
+  if (await currentStaff()) redirect("/admin");
 
   // Details are not finished, so there is nothing to show yet.
   if (profile.status === "incomplete") redirect("/onboarding");
