@@ -13,6 +13,7 @@ export type Permission =
   | "staff.manage"
   | "suppliers.read"
   | "suppliers.decide"
+  | "buyers.read"
   | "documents.view"
   | "bank.view_full"
   | "rules.read"
